@@ -1631,29 +1631,83 @@ function skipProxy() {
 }
 
 // ── 음성 인식 (STT) ─────────────────────────────────────────
+// 어르신 말 누적용 (조각난 인식을 한 문장으로 모음)
+let pendingSpeech = '';
+let silenceTimer = null;
+const SILENCE_MS = 1700;   // 이 시간만큼 조용하면 "말 끝났다"고 보고 코코가 응답
+
+// 같은 말이 연달아 반복되면 하나로 합침 ("잠 잘 잤어 잠 잘 잤어" → "잠 잘 잤어")
+function dedupeSpeech(s) {
+  s = (s || '').trim().replace(/\s+/g, ' ');
+  if (!s) return '';
+  let words = s.split(' ');
+  // 1~4단어 구절이 연속 반복되면 하나만 남김
+  for (let len = 4; len >= 1; len--) {
+    const out = [];
+    let i = 0;
+    while (i < words.length) {
+      if (i + 2 * len <= words.length) {
+        const a = words.slice(i, i + len).join(' ');
+        const b = words.slice(i + len, i + 2 * len).join(' ');
+        if (a === b) {
+          out.push(...words.slice(i, i + len));
+          i += len;
+          while (i + len <= words.length && words.slice(i, i + len).join(' ') === a) i += len;
+          continue;
+        }
+      }
+      out.push(words[i]);
+      i++;
+    }
+    words = out;
+  }
+  return words.join(' ');
+}
+
+function flushSpeech() {
+  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+  const text = dedupeSpeech(pendingSpeech);
+  pendingSpeech = '';
+  if (text && !processing && !kokoSpeaking && !callEnded) {
+    onElderSpeech(text);
+  }
+}
+
 function setupSpeechRecognition() {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   if (!SR) return;
   recognition = new SR();
   recognition.lang = 'ko-KR';
-  recognition.continuous = false;     // 한 문장씩 받고
-  recognition.interimResults = false;
+  recognition.continuous = true;      // 중간에 끊지 않고 계속 들음
+  recognition.interimResults = true;  // 말하는 중에도 실시간 인식
 
   recognition.onresult = (e) => {
-    const text = e.results[0][0].transcript;
-    if (text && text.trim()) {
-      onElderSpeech(text);  // 인식되면 코코에게 전달 (이 안에서 다시 듣기 재개)
+    // 새로 확정된(final) 결과만 누적
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) {
+        const t = e.results[i][0].transcript.trim();
+        if (t) pendingSpeech += (pendingSpeech ? ' ' : '') + t;
+      }
     }
+    // 말소리가 들어올 때마다 침묵 타이머 리셋 → 끝까지 기다렸다가 처리
+    if (silenceTimer) clearTimeout(silenceTimer);
+    silenceTimer = setTimeout(flushSpeech, SILENCE_MS);
   };
+
   recognition.onerror = (e) => {
-    // no-speech(조용함) 같은 에러는 자동모드면 조용히 재시도
     if (autoMode && !callEnded && (e.error === 'no-speech' || e.error === 'aborted')) {
       return; // onend에서 재시작 처리
     }
     setListening(false);
   };
+
   recognition.onend = () => {
     setListening(false);
+    // 끊겼는데 아직 못 보낸 말이 남아있으면 마저 처리
+    if (pendingSpeech.trim() && !processing && !kokoSpeaking) {
+      flushSpeech();
+      return;
+    }
     // 자동 모드이고, 통화 중이고, 코코가 말하는 중이 아니면 → 다시 듣기 시작
     if (autoMode && !callEnded && !kokoSpeaking && !processing) {
       setTimeout(() => startListening(), 250);
@@ -1732,6 +1786,8 @@ function interruptKoko() {
 function startListening() {
   if (!recognition || callEnded || kokoSpeaking || processing) return;
   if (isListening) return;
+  pendingSpeech = '';
+  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
   try {
     recognition.start();
     setListening(true);
@@ -1905,6 +1961,8 @@ async function startCall() {
 async function onElderSpeech(text) {
   if (processing || kokoSpeaking) return; // 이미 처리 중이면 중복 방지
   processing = true;
+  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+  pendingSpeech = '';
   if (isListening && recognition) { try { recognition.stop(); } catch(e){} }
   setListening(false);
 
