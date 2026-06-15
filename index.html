@@ -422,6 +422,56 @@
     <div onclick="logout()" style="font-size:13px; color:var(--gray); margin-top:14px; cursor:pointer;">⇄ 다른 계정으로 로그인</div>
   </div>
 
+  <!-- ①-A 가족 만들기 / 참여 선택 -->
+  <div id="family-choice" class="screen">
+    <div class="login-emoji koko-img" style="width:90px;height:78px;"></div>
+    <div class="login-title">가족 연결</div>
+    <div class="login-sub">코코링은 가족이 함께 어르신을 돌봐요</div>
+
+    <div style="width:100%; margin-top:8px;">
+      <div class="ios-card" onclick="goCreateFamily()" style="cursor:pointer; text-align:center; padding:24px;">
+        <div style="font-size:32px; margin-bottom:8px;">👵</div>
+        <div style="font-size:17px; font-weight:800; color:#16243A; margin-bottom:4px;">어르신 등록하고 시작</div>
+        <div style="font-size:13px; color:var(--gray); line-height:19px;">새로운 가족을 만들고<br>돌볼 어르신을 등록해요 (대표 보호자)</div>
+      </div>
+
+      <div class="ios-card" onclick="showScreen('family-join')" style="cursor:pointer; text-align:center; padding:24px;">
+        <div style="font-size:32px; margin-bottom:8px;">🔗</div>
+        <div style="font-size:17px; font-weight:800; color:#16243A; margin-bottom:4px;">가족 코드로 참여</div>
+        <div style="font-size:13px; color:var(--gray); line-height:19px;">이미 가족이 등록한 어르신을<br>코드로 함께 돌봐요</div>
+      </div>
+    </div>
+    <div onclick="logout()" style="font-size:13px; color:var(--gray); margin-top:10px; cursor:pointer;">⇄ 다른 계정으로 로그인</div>
+  </div>
+
+  <!-- ①-A2 가족 코드 입력 -->
+  <div id="family-join" class="screen">
+    <div class="tab-scroll" style="padding:56px 24px 40px;">
+      <div class="es-back" onclick="showScreen('family-choice')">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#16243A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        <span>뒤로</span>
+      </div>
+      <div class="page-head">
+        <div class="page-eyebrow">코코링</div>
+        <div class="page-title">가족 코드로 참여</div>
+        <div class="page-sub">대표 보호자에게 받은 코드를 입력해주세요.</div>
+      </div>
+
+      <div class="koko-msg" style="margin:18px 0 24px;">
+        <div class="koko-msg-avatar koko-img"></div>
+        <div class="koko-msg-text">코드를 입력하면 같은 어르신의 브리핑을 함께 볼 수 있어요.</div>
+      </div>
+
+      <div class="ios-card">
+        <div class="field-label">가족 초대 코드</div>
+        <input class="name-input" id="join-code" placeholder="예) KOKO-7X92A" style="text-transform:uppercase; letter-spacing:1px; font-weight:700;" />
+        <div id="join-error" style="color:#D9534F; font-size:13px; margin-top:8px; display:none;"></div>
+      </div>
+
+      <button class="btn-big" id="join-btn" onclick="doJoinFamily()">참여하기</button>
+    </div>
+  </div>
+
   <!-- ①-B 어르신 정보 등록 (자녀 최초 가입 시) -->
   <div id="elder-setup" class="screen">
     <div class="tab-scroll" style="padding:56px 24px 40px;">
@@ -688,31 +738,18 @@
         </div>
 
         <div class="section-head"><div class="section-title">연결된 가족</div></div>
-        <div class="ios-card">
-          <div class="fam-row">
-            <div class="fam-initial">김</div>
-            <div>
-              <div class="fam-name">김민수</div>
-              <div class="fam-role">아들 (본인)</div>
-            </div>
-            <div class="fam-badge">대표 보호자</div>
-          </div>
-          <div class="fam-row">
-            <div class="fam-initial">김</div>
-            <div>
-              <div class="fam-name">김지영</div>
-              <div class="fam-role">딸</div>
-            </div>
-          </div>
+        <div class="ios-card" id="family-members-card">
+          <div class="fam-row"><div class="fam-name">가족 정보를 불러오는 중...</div></div>
         </div>
 
         <div class="invite-card">
-          <div>
+          <div style="flex:1; min-width:0;">
             <div class="invite-label">가족 초대 코드</div>
-            <div class="invite-code">KOKO-7421</div>
+            <div class="invite-code" id="invite-code-text">KOKO-XXXXX</div>
           </div>
-          <button class="invite-btn" onclick="alert('초대 코드가 복사되었어요!')">공유</button>
+          <button class="invite-btn" onclick="shareInvite()">공유</button>
         </div>
+        <div style="font-size:12px; color:var(--gray); margin:-6px 4px 14px; line-height:18px;" id="invite-link-text"></div>
 
         <div class="section-head"><div class="section-title">통화 설정</div></div>
         <div class="ios-card">
@@ -834,6 +871,11 @@ let reportList = [];          // Firestore에서 로드
 let elderProfile = null;      // Firestore에서 로드한 어르신 정보 { name, age, rel, meta }
 let currentUser = null;       // 로그인된 Firebase 사용자
 let proxySkip = false;        // API 키 모달 스킵 (세션 메모리)
+// ── 가족 연결 상태 ──
+let currentFamilyId = null;   // 현재 사용자가 속한 가족 ID
+let currentFamilyCode = '';   // 가족 초대 코드 (KOKO-XXXXX)
+let currentMemberRole = '';   // 'owner' | 'member'
+let familyMembers = [];       // 가족 구성원 목록
 let recognition = null;
 let isListening = false;
 let autoMode = true;       // 핸즈프리 자동 듣기 모드 (기본 켜짐)
@@ -957,47 +999,168 @@ window.addEventListener('load', () => {
     if (user) {
       currentUser = user;
       await ensureUserDoc(user);   // users 컬렉션 자동 생성/갱신
-      await loadFamilyData();      // Firestore에서 어르신 정보 + 통화기록 로드
-      showScreen('login-screen');  // 역할 선택으로
+      await loadUserContext();     // 가족 소속 확인 + 데이터 로드
+      routeAfterLogin();
     } else {
       currentUser = null;
       elderProfile = null;
       reportList = [];
+      currentFamilyId = null; currentFamilyCode = ''; currentMemberRole = ''; familyMembers = [];
       showScreen('auth-screen');
     }
   });
 });
 
+// 로그인 후 라우팅: 가족이 있으면 역할선택, 없으면 가족 만들기/참여 화면
+function routeAfterLogin() {
+  if (currentFamilyId) {
+    showScreen('login-screen');   // 역할 선택
+  } else {
+    // 초대 링크(?join=코드)로 들어온 경우 → 코드 미리 채우고 참여 화면
+    const joinCode = new URLSearchParams(location.search).get('join');
+    if (joinCode) {
+      document.getElementById('join-code').value = joinCode;
+      showScreen('family-join');
+    } else {
+      showScreen('family-choice');  // 가족 만들기 or 참여
+    }
+  }
+}
+
 // ── Firestore: users 컬렉션 자동 생성 ───────────────────────
-// 최초 로그인 시 사용자 문서 생성 (uid, name, email, provider, role, createdAt)
 async function ensureUserDoc(user) {
   try {
     const ref = fbDb.collection('users').doc(user.uid);
     const snap = await ref.get();
-
-    // provider 판별: kakao / naver / google / email
     let provider = 'email';
     const pid = (user.providerData[0] && user.providerData[0].providerId) || '';
     if (pid.includes('google')) provider = 'google';
     else if (pid.includes('password')) provider = 'email';
 
     if (!snap.exists) {
-      // 최초 로그인 → 보호자(guardian) 역할 자동 부여
+      // 최초 로그인 → 보호자(guardian) 역할 자동 부여, 가족은 아직 없음
       await ref.set({
         uid: user.uid,
         name: user.displayName || (user.email ? user.email.split('@')[0] : '보호자'),
         email: user.email || '',
         provider: provider,
         role: 'guardian',
+        familyId: null,
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
     } else {
-      // 기존 사용자 → 마지막 로그인만 갱신 (role은 유지)
       await ref.set({ lastLoginAt: firebase.firestore.FieldValue.serverTimestamp() }, { merge: true });
     }
   } catch (e) {
     console.error('users 문서 생성 실패:', e);
   }
+}
+
+// ── 가족 코드 생성 (KOKO-XXXXX) ─────────────────────────────
+function genFamilyCode() {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // 헷갈리는 0,O,1,I 제외
+  let code = '';
+  for (let i = 0; i < 5; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return 'KOKO-' + code;
+}
+
+// ── 사용자 컨텍스트 로드 (소속 가족 확인) ───────────────────
+async function loadUserContext() {
+  if (!currentUser) return;
+  currentFamilyId = null; currentFamilyCode = ''; currentMemberRole = '';
+  elderProfile = null; reportList = []; familyMembers = [];
+  try {
+    const userSnap = await fbDb.collection('users').doc(currentUser.uid).get();
+    const famId = userSnap.exists ? userSnap.data().familyId : null;
+    if (famId) {
+      currentFamilyId = famId;
+      await loadFamilyData(famId);
+    }
+  } catch (e) {
+    console.error('컨텍스트 로드 실패:', e);
+  }
+}
+
+// ── Firestore: 가족 데이터 로드 (familyId 기준 공유) ────────
+async function loadFamilyData(familyId) {
+  try {
+    // 가족 기본 정보 (코드)
+    const fam = await fbDb.collection('families').doc(familyId).get();
+    if (fam.exists) currentFamilyCode = fam.data().familyCode || '';
+
+    // 내 멤버 역할
+    const myMember = await fbDb.collection('familyMembers')
+      .where('familyId', '==', familyId).where('uid', '==', currentUser.uid).limit(1).get();
+    if (!myMember.empty) currentMemberRole = myMember.docs[0].data().role || 'member';
+
+    // 어르신 정보 (seniors/{familyId})
+    const senior = await fbDb.collection('seniors').doc(familyId).get();
+    elderProfile = senior.exists ? senior.data() : null;
+
+    // 통화기록/브리핑 (reports where familyId) — familyId 기준 공유
+    const snap = await fbDb.collection('reports')
+      .where('familyId', '==', familyId).limit(100).get();
+    reportList = snap.docs.map(d => d.data())
+      .sort((a, b) => (b.생성시각 || 0) - (a.생성시각 || 0));
+
+    // 가족 구성원 목록
+    const mem = await fbDb.collection('familyMembers').where('familyId', '==', familyId).get();
+    familyMembers = mem.docs.map(d => d.data());
+  } catch (e) {
+    console.error('가족 데이터 로드 실패:', e);
+  }
+}
+
+// ── 가족 만들기 (어르신 등록과 함께) ────────────────────────
+async function createFamilyWithElder(elderData) {
+  const familyId = fbDb.collection('families').doc().id; // 새 ID
+  const code = genFamilyCode();
+  const batch = fbDb.batch();
+
+  // 1) families
+  batch.set(fbDb.collection('families').doc(familyId), {
+    familyId, familyCode: code, ownerUid: currentUser.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  // 2) seniors
+  batch.set(fbDb.collection('seniors').doc(familyId), {
+    familyId, ...elderData,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  // 3) familyMembers (owner)
+  const myName = (await fbDb.collection('users').doc(currentUser.uid).get()).data().name || '보호자';
+  batch.set(fbDb.collection('familyMembers').doc(familyId + '_' + currentUser.uid), {
+    familyId, uid: currentUser.uid, name: myName, email: currentUser.email || '',
+    role: 'owner', joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  // 4) users.familyId 갱신
+  batch.set(fbDb.collection('users').doc(currentUser.uid), { familyId }, { merge: true });
+
+  await batch.commit();
+  currentFamilyId = familyId;
+  await loadFamilyData(familyId);
+}
+
+// ── 가족 코드로 참여 ────────────────────────────────────────
+async function joinFamilyByCode(code) {
+  code = code.trim().toUpperCase();
+  if (!code.startsWith('KOKO-')) code = 'KOKO-' + code.replace('KOKO-', '');
+  // 코드로 가족 찾기
+  const q = await fbDb.collection('families').where('familyCode', '==', code).limit(1).get();
+  if (q.empty) throw new Error('해당 코드의 가족을 찾을 수 없어요.');
+  const familyId = q.docs[0].id;
+
+  const myName = (await fbDb.collection('users').doc(currentUser.uid).get()).data().name || '보호자';
+  const batch = fbDb.batch();
+  batch.set(fbDb.collection('familyMembers').doc(familyId + '_' + currentUser.uid), {
+    familyId, uid: currentUser.uid, name: myName, email: currentUser.email || '',
+    role: 'member', joinedAt: firebase.firestore.FieldValue.serverTimestamp()
+  });
+  batch.set(fbDb.collection('users').doc(currentUser.uid), { familyId }, { merge: true });
+  await batch.commit();
+
+  currentFamilyId = familyId;
+  await loadFamilyData(familyId);
 }
 
 // ── 보호자 로그인 / 회원가입 ────────────────────────────────
@@ -1072,24 +1235,6 @@ function firebaseErrorMsg(e) {
   return '오류가 발생했어요: ' + (e.message || c);
 }
 
-// ── Firestore: 가족 데이터 로드 ─────────────────────────────
-async function loadFamilyData() {
-  if (!currentUser) return;
-  try {
-    // 어르신 정보
-    const famDoc = await fbDb.collection('families').doc(currentUser.uid).get();
-    elderProfile = (famDoc.exists && famDoc.data().elder) ? famDoc.data().elder : null;
-    // 통화 기록 (최신순)
-    const snap = await fbDb.collection('families').doc(currentUser.uid)
-      .collection('reports').orderBy('생성시각', 'desc').limit(100).get();
-    reportList = snap.docs.map(d => d.data());
-  } catch (e) {
-    console.error('데이터 로드 실패:', e);
-    elderProfile = null;
-    reportList = [];
-  }
-}
-
 // ── 로그인 화면 ─────────────────────────────────────────────
 function selectRole(role) {
   selectedRole = role;
@@ -1108,12 +1253,43 @@ document.addEventListener('input', (e) => {
 
 function startApp() {
   userRole = selectedRole;
+  // 어르신/자녀 모두 가족이 있어야 진입 가능
+  if (!currentFamilyId) {
+    showScreen('family-choice');
+    return;
+  }
   // 자녀인데 어르신 정보가 아직 없으면 → 등록 화면으로
   if (userRole === 'child' && !elderProfile) {
     showScreen('elder-setup');
     return;
   }
   enterApp();
+}
+
+// ── 가족 만들기/참여 ────────────────────────────────────────
+function goCreateFamily() {
+  userRole = 'child';   // 가족 만드는 사람은 보호자
+  showScreen('elder-setup');
+}
+
+async function doJoinFamily() {
+  const code = document.getElementById('join-code').value.trim();
+  const errEl = document.getElementById('join-error');
+  errEl.style.display = 'none';
+  if (!code) { errEl.textContent = '가족 코드를 입력해주세요.'; errEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('join-btn');
+  btn.disabled = true; btn.textContent = '참여 중...';
+  try {
+    await joinFamilyByCode(code);
+    userRole = 'child';
+    enterApp();   // 자녀 화면으로
+  } catch (e) {
+    errEl.textContent = e.message || '참여에 실패했어요. 코드를 확인해주세요.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = '참여하기';
+  }
 }
 
 // ── 어르신 정보 등록 화면 ──
@@ -1154,9 +1330,15 @@ async function saveElderInfo() {
   const btn = document.getElementById('es-save-btn');
   btn.disabled = true; btn.textContent = '저장 중...';
   try {
-    await fbDb.collection('families').doc(currentUser.uid)
-      .set({ elder: elder }, { merge: true });
-    elderProfile = elder;   // 메모리에도 반영
+    if (!currentFamilyId) {
+      // 가족이 없으면 → 새 가족 생성 + 어르신 등록 (등록자가 owner)
+      await createFamilyWithElder(elder);
+    } else {
+      // 이미 가족이 있으면 → 어르신 정보만 수정
+      await fbDb.collection('seniors').doc(currentFamilyId)
+        .set({ familyId: currentFamilyId, ...elder }, { merge: true });
+      elderProfile = elder;
+    }
     enterApp();
   } catch (e) {
     console.error(e);
@@ -1166,12 +1348,12 @@ async function saveElderInfo() {
   }
 }
 
-// 등록 취소: 이미 등록된 정보가 있으면 자녀 홈으로, 없으면(최초 가입) 역할선택으로
+// 등록 취소: 가족 있으면 자녀 홈으로, 없으면 가족 선택 화면으로
 function cancelElderSetup() {
-  if (elderProfile && userRole === 'child') {
+  if (currentFamilyId && elderProfile) {
     enterApp();
   } else {
-    showScreen('login-screen');
+    showScreen('family-choice');
   }
 }
 
@@ -1225,6 +1407,7 @@ function enterApp() {
 function logout() {
   userName = ''; userRole = ''; selectedRole = '';
   elderProfile = null; reportList = [];
+  currentFamilyId = null; currentFamilyCode = ''; currentMemberRole = ''; familyMembers = [];
   document.getElementById('role-elder').classList.remove('selected');
   document.getElementById('role-child').classList.remove('selected');
   document.getElementById('start-btn').disabled = true;
@@ -1692,14 +1875,14 @@ ${transcript}
   report.이름 = (elderProfile && elderProfile.name) || userName || '어르신';
   report.대화내용 = transcript; // 원본 대화도 함께 저장
   report.생성시각 = now.getTime(); // 정렬용
+  report.familyId = currentFamilyId || null; // 가족 단위 공유
 
   reportList.unshift(report); // 메모리에도 최신순 반영
 
-  // Firestore에 브리핑/통화기록 저장
-  if (firebaseReady && currentUser) {
+  // Firestore에 브리핑/통화기록 저장 (reports 컬렉션, familyId로 공유)
+  if (firebaseReady && currentUser && currentFamilyId) {
     try {
-      await fbDb.collection('families').doc(currentUser.uid)
-        .collection('reports').add(report);
+      await fbDb.collection('reports').add(report);
     } catch (e) {
       console.error('브리핑 저장 실패:', e);
     }
@@ -2086,7 +2269,51 @@ function renderWeekChart(id, data, color, unit) {
 
 // ── 탭 4: 설정 (정적, 프로필만 업데이트) ──
 function renderSettingsTab() {
-  // 프로필은 renderHomeTab에서 이미 채움
+  // 가족 구성원 목록
+  const card = document.getElementById('family-members-card');
+  if (card) {
+    if (familyMembers && familyMembers.length > 0) {
+      card.innerHTML = familyMembers.map(m => {
+        const isMe = m.uid === (currentUser && currentUser.uid);
+        const initial = (m.name || '?').charAt(0);
+        const badge = m.role === 'owner' ? '<div class="fam-badge">대표 보호자</div>' : '';
+        return `<div class="fam-row">
+          <div class="fam-initial">${escHtml(initial)}</div>
+          <div style="flex:1;">
+            <div class="fam-name">${escHtml(m.name || '보호자')}${isMe ? ' (본인)' : ''}</div>
+            <div class="fam-role">${m.role === 'owner' ? '대표 보호자' : '가족 구성원'}</div>
+          </div>
+          ${badge}
+        </div>`;
+      }).join('');
+    } else {
+      card.innerHTML = '<div class="fam-row"><div class="fam-name">아직 연결된 가족이 없어요</div></div>';
+    }
+  }
+  // 초대 코드 + 링크
+  const codeEl = document.getElementById('invite-code-text');
+  const linkEl = document.getElementById('invite-link-text');
+  if (codeEl) codeEl.textContent = currentFamilyCode || 'KOKO-XXXXX';
+  if (linkEl && currentFamilyCode) linkEl.textContent = '초대 링크: ' + buildInviteLink();
+}
+
+// 초대 링크 생성 (현재 접속 주소 기준)
+function buildInviteLink() {
+  const base = location.origin + location.pathname.replace(/index\.html$/, '');
+  return base + '?join=' + (currentFamilyCode || '');
+}
+
+// 초대 코드/링크 공유
+function shareInvite() {
+  const link = buildInviteLink();
+  const text = `코코링 가족 초대\n코드: ${currentFamilyCode}\n링크: ${link}`;
+  if (navigator.share) {
+    navigator.share({ title: '코코링 가족 초대', text: text }).catch(() => {});
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(text).then(() => alert('초대 코드와 링크가 복사되었어요!')).catch(() => alert(text));
+  } else {
+    alert(text);
+  }
 }
 
 // 인지 평가 영역 렌더링
