@@ -607,6 +607,34 @@
     </div>
   </div>
 
+  <!-- 셀프 카메라 촬영 오버레이 -->
+  <div id="photo-overlay" style="display:none; position:fixed; inset:0; background:#16243A; z-index:300; flex-direction:column; align-items:center; justify-content:center; padding:24px; text-align:center;">
+    <!-- 1단계: 동의 -->
+    <div id="photo-consent" style="width:100%; max-width:360px;">
+      <div class="koko-img" style="width:90px; height:78px; margin:0 auto 18px;"></div>
+      <div style="font-size:22px; font-weight:800; color:white; margin-bottom:12px; line-height:32px;">오늘 모습 한 장<br>가족분께 보여드릴까요?</div>
+      <div style="font-size:15px; color:#B9C4D6; line-height:23px; margin-bottom:32px;">사진은 가족만 볼 수 있어요.<br>원치 않으시면 안 찍어도 괜찮아요.</div>
+      <button class="btn-big" style="background:white; color:#16243A;" onclick="startPhotoCapture()">📷  네, 찍을게요</button>
+      <button class="btn-outline" style="border-color:#5A6B85; color:#B9C4D6;" onclick="skipPhoto()">아니요, 괜찮아요</button>
+    </div>
+    <!-- 2단계: 카메라 미리보기 + 카운트다운 -->
+    <div id="photo-camera" style="display:none; width:100%; max-width:360px;">
+      <div style="position:relative; width:100%; aspect-ratio:3/4; border-radius:24px; overflow:hidden; background:#000; margin-bottom:20px;">
+        <video id="photo-video" autoplay playsinline muted style="width:100%; height:100%; object-fit:cover; transform:scaleX(-1);"></video>
+        <div id="photo-countdown" style="position:absolute; inset:0; display:flex; align-items:center; justify-content:center; font-size:90px; font-weight:800; color:white; text-shadow:0 2px 12px rgba(0,0,0,0.5);"></div>
+      </div>
+      <div style="font-size:15px; color:#B9C4D6;">잠시 후 촬영돼요. 카메라를 봐주세요 😊</div>
+    </div>
+    <!-- 3단계: 촬영 결과 -->
+    <div id="photo-result" style="display:none; width:100%; max-width:360px;">
+      <div style="font-size:20px; font-weight:800; color:white; margin-bottom:16px;">찰칵! 잘 찍혔어요 📸</div>
+      <img id="photo-preview" style="width:100%; aspect-ratio:3/4; object-fit:cover; border-radius:24px; margin-bottom:20px;" />
+      <button class="btn-big" style="background:white; color:#16243A;" onclick="confirmPhoto()">이걸로 보낼게요</button>
+      <button class="btn-outline" style="border-color:#5A6B85; color:#B9C4D6;" onclick="retakePhoto()">다시 찍기</button>
+    </div>
+  </div>
+  <canvas id="photo-canvas" style="display:none;"></canvas>
+
   <!-- ⑤ 자녀 화면 -->
   <div id="child-screen" class="screen">
 
@@ -1239,7 +1267,7 @@ async function joinFamilyByCode(code) {
 // ── 구독 관리 (owner 전용) ──────────────────────────────────
 // 실제 결제는 향후 카카오페이/네이버페이 연동. 지금은 구조만 구현.
 async function subscribePlan(plan, provider) {
-  if (!isOwner()) { alert('구독 결제는 대표 보호자만 할 수 있어요.'); return; }
+  // 결제는 가족 누구나 가능 (owner 권한 불필요)
   const info = PLAN_INFO[plan];
   if (!info) return;
 
@@ -1286,9 +1314,8 @@ function mockPayment(provider, info) {
   );
 }
 
-// 플랜 변경/구독 화면 열기 (owner 전용)
+// 구독/결제 화면 열기 (결제는 가족 누구나 가능)
 function openPlanModal() {
-  if (!isOwner()) { alert('플랜 변경은 대표 보호자만 할 수 있어요.'); return; }
   document.getElementById('plan-modal').classList.add('show');
 }
 function closePlanModal() {
@@ -2016,6 +2043,93 @@ async function onElderSpeech(text) {
   }
 }
 
+// ── 셀프 카메라 촬영 (통화 종료 시 동의받고 촬영) ──────────────
+let photoStream = null;
+let photoResolve = null;
+let capturedPhoto = null;
+
+// 동의 → 촬영 → base64 사진 반환 (Promise). 안 찍으면 null
+function askForPhoto() {
+  return new Promise((resolve) => {
+    photoResolve = resolve;
+    capturedPhoto = null;
+    document.getElementById('photo-consent').style.display = 'block';
+    document.getElementById('photo-camera').style.display = 'none';
+    document.getElementById('photo-result').style.display = 'none';
+    document.getElementById('photo-overlay').style.display = 'flex';
+  });
+}
+
+function skipPhoto() {
+  closePhotoOverlay();
+  if (photoResolve) { photoResolve(null); photoResolve = null; }
+}
+
+async function startPhotoCapture() {
+  document.getElementById('photo-consent').style.display = 'none';
+  document.getElementById('photo-camera').style.display = 'block';
+  try {
+    photoStream = await navigator.mediaDevices.getUserMedia({
+      video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } }, audio: false
+    });
+    const video = document.getElementById('photo-video');
+    video.srcObject = photoStream;
+    await video.play();
+    // 3초 카운트다운
+    for (let n = 3; n >= 1; n--) {
+      document.getElementById('photo-countdown').textContent = n;
+      await new Promise(r => setTimeout(r, 1000));
+    }
+    document.getElementById('photo-countdown').textContent = '';
+    takePhoto();
+  } catch (e) {
+    console.error('카메라 사용 실패:', e);
+    alert('카메라를 사용할 수 없어요. 사진 없이 진행할게요.');
+    skipPhoto();
+  }
+}
+
+function takePhoto() {
+  const video = document.getElementById('photo-video');
+  const canvas = document.getElementById('photo-canvas');
+  // 작게 압축 (가로 최대 400px) — Firestore에 넣을 수 있는 크기로
+  const maxW = 400;
+  const scale = Math.min(1, maxW / video.videoWidth);
+  canvas.width = video.videoWidth * scale;
+  canvas.height = video.videoHeight * scale;
+  const ctx = canvas.getContext('2d');
+  // 셀카처럼 좌우 반전
+  ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
+  ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+  capturedPhoto = canvas.toDataURL('image/jpeg', 0.55); // 압축 JPEG base64
+  stopPhotoStream();
+  document.getElementById('photo-preview').src = capturedPhoto;
+  document.getElementById('photo-camera').style.display = 'none';
+  document.getElementById('photo-result').style.display = 'block';
+}
+
+function retakePhoto() {
+  capturedPhoto = null;
+  startPhotoCapture();
+}
+
+function confirmPhoto() {
+  closePhotoOverlay();
+  if (photoResolve) { photoResolve(capturedPhoto); photoResolve = null; }
+}
+
+function stopPhotoStream() {
+  if (photoStream) {
+    photoStream.getTracks().forEach(t => t.stop());
+    photoStream = null;
+  }
+}
+
+function closePhotoOverlay() {
+  stopPhotoStream();
+  document.getElementById('photo-overlay').style.display = 'none';
+}
+
 async function endCall() {
   if (callEnded) return; // 이미 종료 처리 중이면 중복 실행 방지
   callEnded = true;
@@ -2036,10 +2150,13 @@ async function endCall() {
     return;
   }
 
+  showScreen('elder-end');
+  // 셀프 카메라 — 동의받고 촬영 (안 찍으면 null)
+  const photoData = await askForPhoto();
+
   document.getElementById('end-icon').textContent = '✅';
   document.getElementById('end-title').textContent = '브리핑을 작성하고 있어요...';
   document.getElementById('end-desc').innerHTML = '잠시만 기다려주세요';
-  showScreen('elder-end');
 
   let report = null;
   const transcript = history
@@ -2108,6 +2225,7 @@ ${transcript}
   report.대화내용 = transcript; // 원본 대화도 함께 저장
   report.생성시각 = now.getTime(); // 정렬용
   report.familyId = currentFamilyId || null; // 가족 단위 공유
+  if (photoData) report.사진 = photoData; // 셀프 카메라 사진 (압축 base64)
 
   reportList.unshift(report); // 메모리에도 최신순 반영
 
@@ -2356,6 +2474,7 @@ function renderBriefCard(r) {
       </div>
       ${renderCognition(r)}
       ${r.위험신호 && r.위험신호 !== '없음' ? `<div class="report-signal" style="margin-top:14px;">⚠ ${escHtml(r.위험신호)}</div>` : ''}
+      ${r.사진 ? `<div style="margin-top:16px;"><div style="font-size:13px;font-weight:700;color:#16243A;margin-bottom:8px;">📸 오늘 어르신 모습</div><img src="${r.사진}" style="width:100%;border-radius:14px;display:block;" /></div>` : ''}
       ${r.대화내용 ? `<details style="margin-top:14px;"><summary style="font-size:13px;color:var(--green);cursor:pointer;font-weight:700;">💬 실제 대화 내용 보기</summary><div style="font-size:13px;color:#555;line-height:21px;margin-top:10px;white-space:pre-wrap;background:var(--bg);border-radius:12px;padding:12px;">${escHtml(r.대화내용)}</div></details>` : ''}
     </div>`;
 }
@@ -2397,6 +2516,7 @@ function renderLogCard(r, expandable) {
       <div class="log-summary">${escHtml((r.요약 || '').slice(0, 80))}${(r.요약||'').length > 80 ? '...' : ''}</div>
       <div class="log-foot">
         <div class="log-tag">🎙️ 녹음</div>
+        ${r.사진 ? `<div class="log-tag">📷 사진</div>` : ''}
         ${signals ? `<div class="log-tag warn">⚠ 신호 ${signals}</div>` : ''}
         <div class="log-chevron">›</div>
       </div>
@@ -2573,13 +2693,10 @@ function renderSubscriptionCard() {
     ? new Date(currentSubscription.expiresAt).toISOString().slice(0,10) : '-';
 
   let actionHtml = '';
-  if (owner) {
-    actionHtml = active
-      ? `<div class="sub-manage" onclick="openPlanModal()">플랜 변경 / 연장 ›</div>`
-      : `<button class="btn-big" style="margin-top:10px;padding:13px;" onclick="openPlanModal()">구독하기</button>`;
-  } else {
-    actionHtml = `<div style="font-size:13px;color:var(--gray);margin-top:8px;">결제·플랜 변경은 대표 보호자만 가능해요.</div>`;
-  }
+  // 결제/연장은 가족 누구나 가능
+  actionHtml = active
+    ? `<div class="sub-manage" onclick="openPlanModal()">${owner ? '플랜 변경 / 연장' : '구독 연장'} ›</div>`
+    : `<button class="btn-big" style="margin-top:10px;padding:13px;" onclick="openPlanModal()">구독하기</button>`;
 
   box.innerHTML = `
     <div class="sub-top">
