@@ -315,6 +315,7 @@
   .fam-name { font-size: 16px; font-weight: 700; color: #16243A; }
   .fam-role { font-size: 13px; color: var(--gray); margin-top: 1px; }
   .fam-badge { margin-left: auto; font-size: 13px; font-weight: 700; color: var(--green); }
+  .fam-remove { margin-left: auto; font-size: 12px; font-weight: 700; color: #D9534F; background: #FBEAE8; border: none; border-radius: 12px; padding: 7px 12px; cursor: pointer; }
 
   .sub-card { background: white; border: 1.5px solid #16243A; border-radius: 18px; padding: 18px; margin-bottom: 14px; }
   .sub-top { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
@@ -497,6 +498,12 @@
         <div class="field-label">나이</div>
         <input class="name-input" id="es-age" type="number" inputmode="numeric" placeholder="예) 78" style="margin-bottom:18px;" />
 
+        <div class="field-label">성별</div>
+        <div class="role-grid" id="es-sex-grid" style="margin-bottom:18px;">
+          <div class="role-card es-sex" data-sex="male" onclick="pickSex(this)"><div class="role-name">할아버지</div></div>
+          <div class="role-card es-sex" data-sex="female" onclick="pickSex(this)"><div class="role-name">할머니</div></div>
+        </div>
+
         <div class="field-label">관계</div>
         <div class="role-grid" id="es-rel-grid" style="margin-bottom:18px;">
           <div class="role-card es-rel" data-rel="아빠" onclick="pickRel(this)"><div class="role-name">아빠</div></div>
@@ -606,6 +613,7 @@
     <!-- ═══ 탭 1: 오늘 (홈) ═══ -->
     <div class="child-tab active" id="tab-home">
       <div class="tab-scroll">
+        <div id="sub-expired-banner" style="display:none; background:#FBEFE0; border:1.5px solid #F0C36D; border-radius:16px; padding:14px 16px; margin-bottom:16px; font-size:14px; color:#8a5a1a; line-height:20px;"></div>
         <div class="page-head">
           <div class="page-head-row">
             <div>
@@ -727,14 +735,11 @@
         </div>
 
         <div class="section-head"><div class="section-title">구독</div></div>
-        <div class="sub-card">
+        <div class="sub-card" id="sub-card-dynamic">
           <div class="sub-top">
             <div class="sub-icon">🎗️</div>
-            <div class="sub-name">코코링 베이직</div>
-            <div class="sub-status">이용중</div>
+            <div class="sub-name">불러오는 중...</div>
           </div>
-          <div class="sub-price">월 1,900원 · 다음 결제일 2026-07-08</div>
-          <div class="sub-manage">구독 관리 ›</div>
         </div>
 
         <div class="section-head"><div class="section-title">연결된 가족</div></div>
@@ -742,12 +747,12 @@
           <div class="fam-row"><div class="fam-name">가족 정보를 불러오는 중...</div></div>
         </div>
 
-        <div class="invite-card">
+        <div class="invite-card" id="invite-card-wrap">
           <div style="flex:1; min-width:0;">
             <div class="invite-label">가족 초대 코드</div>
             <div class="invite-code" id="invite-code-text">KOKO-XXXXX</div>
           </div>
-          <button class="invite-btn" onclick="shareInvite()">공유</button>
+          <button class="invite-btn" id="invite-share-btn" onclick="shareInvite()">공유</button>
         </div>
         <div style="font-size:12px; color:var(--gray); margin:-6px 4px 14px; line-height:18px;" id="invite-link-text"></div>
 
@@ -827,6 +832,41 @@
 </div>
 <style>#detail-modal.show { display:flex !important; }</style>
 
+<!-- 구독 플랜 / 결제 모달 (owner 전용) -->
+<div id="plan-modal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.5); z-index:210; align-items:flex-end; justify-content:center;">
+  <div style="background:var(--bg); width:100%; max-width:430px; max-height:88vh; border-radius:24px 24px 0 0; overflow-y:auto; padding:22px;">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <div style="font-size:20px; font-weight:800; color:#16243A;">구독 플랜</div>
+      <div onclick="closePlanModal()" style="font-size:24px; color:var(--gray); cursor:pointer; line-height:1;">×</div>
+    </div>
+    <div style="font-size:13px; color:var(--gray); margin-bottom:18px; line-height:19px;">가족 1명만 결제하면 온 가족이 함께 이용해요.</div>
+
+    <div class="sub-card" style="border-color:#16243A;">
+      <div class="sub-top">
+        <div class="sub-icon">🎗️</div>
+        <div class="sub-name">코코링 베이직</div>
+      </div>
+      <div class="sub-price" style="margin-bottom:4px;">월 1,900원 · 30일 이용</div>
+      <div style="font-size:13px; color:var(--gray); line-height:20px;">매일 안부 전화 · 브리핑 · 인지 분석 · 가족 공유 전부 포함</div>
+    </div>
+
+    <div style="font-size:13px; font-weight:700; color:#16243A; margin:18px 4px 10px;">결제 수단 선택</div>
+    <button class="btn-social" style="background:#FEE500; border-color:#FEE500; color:#3C1E1E;" onclick="subscribePlan('basic','kakaopay')">
+      <span style="font-weight:800;">카카오페이로 결제</span>
+    </button>
+    <button class="btn-social" style="background:#03C75A; border-color:#03C75A; color:white;" onclick="subscribePlan('basic','naverpay')">
+      <span style="font-weight:800;">네이버페이로 결제</span>
+    </button>
+    <button class="btn-social" onclick="subscribePlan('basic','card')">
+      <span style="font-weight:800;">카드로 결제</span>
+    </button>
+    <div style="font-size:11px; color:#B8C0CB; text-align:center; margin-top:10px; line-height:17px;">
+      ※ 실제 결제는 연동 예정이에요. 지금은 구독 상태만 활성화돼요.
+    </div>
+  </div>
+</div>
+<style>#plan-modal.show { display:flex !important; }</style>
+
 <!-- Gemini API 키 설정 모달 -->
 <div id="api-modal">
   <div class="modal-box">
@@ -876,6 +916,23 @@ let currentFamilyId = null;   // 현재 사용자가 속한 가족 ID
 let currentFamilyCode = '';   // 가족 초대 코드 (KOKO-XXXXX)
 let currentMemberRole = '';   // 'owner' | 'member'
 let familyMembers = [];       // 가족 구성원 목록
+// ── 구독 상태 (가족 단위) ──
+let currentSubscription = null; // { plan, status, startedAt, expiresAt, paidByUid, paymentProvider }
+const PLAN_INFO = {
+  free:  { name: '무료 체험', price: 0,    days: 14 },
+  basic: { name: '코코링 베이직', price: 1900, days: 30 },
+};
+function isOwner() { return currentMemberRole === 'owner'; }
+function isSubscriptionActive() {
+  if (!currentSubscription) return false;
+  if (currentSubscription.status !== 'active') return false;
+  const exp = currentSubscription.expiresAt || 0;
+  return exp > Date.now();
+}
+function subDaysLeft() {
+  if (!currentSubscription || !currentSubscription.expiresAt) return 0;
+  return Math.max(0, Math.ceil((currentSubscription.expiresAt - Date.now()) / 86400000));
+}
 let recognition = null;
 let isListening = false;
 let autoMode = true;       // 핸즈프리 자동 듣기 모드 (기본 켜짐)
@@ -1106,6 +1163,10 @@ async function loadFamilyData(familyId) {
     // 가족 구성원 목록
     const mem = await fbDb.collection('familyMembers').where('familyId', '==', familyId).get();
     familyMembers = mem.docs.map(d => d.data());
+
+    // 구독 상태 (subscriptions/{familyId})
+    const sub = await fbDb.collection('subscriptions').doc(familyId).get();
+    currentSubscription = sub.exists ? sub.data() : null;
   } catch (e) {
     console.error('가족 데이터 로드 실패:', e);
   }
@@ -1135,6 +1196,18 @@ async function createFamilyWithElder(elderData) {
   });
   // 4) users.familyId 갱신
   batch.set(fbDb.collection('users').doc(currentUser.uid), { familyId }, { merge: true });
+  // 5) subscriptions — 가족 단위 무료 체험 14일 자동 시작
+  const now = Date.now();
+  batch.set(fbDb.collection('subscriptions').doc(familyId), {
+    familyId,
+    plan: 'free',
+    status: 'active',
+    startedAt: now,
+    expiresAt: now + PLAN_INFO.free.days * 86400000,
+    paidByUid: null,
+    paymentProvider: 'none',   // 향후: 'kakaopay' | 'naverpay' | 'card'
+    updatedAt: now
+  });
 
   await batch.commit();
   currentFamilyId = familyId;
@@ -1163,7 +1236,96 @@ async function joinFamilyByCode(code) {
   await loadFamilyData(familyId);
 }
 
-// ── 보호자 로그인 / 회원가입 ────────────────────────────────
+// ── 구독 관리 (owner 전용) ──────────────────────────────────
+// 실제 결제는 향후 카카오페이/네이버페이 연동. 지금은 구조만 구현.
+async function subscribePlan(plan, provider) {
+  if (!isOwner()) { alert('구독 결제는 대표 보호자만 할 수 있어요.'); return; }
+  const info = PLAN_INFO[plan];
+  if (!info) return;
+
+  // ────────────────────────────────────────────────
+  // 🔌 향후 결제 연동 지점 (PaymentGateway)
+  //   provider별로 결제창 호출 → 성공 콜백에서 아래 구독 갱신 실행
+  //   예) const ok = await PaymentGateway.pay(provider, info.price);
+  //       if (!ok) return;
+  //   provider: 'kakaopay' | 'naverpay' | 'card'
+  // ────────────────────────────────────────────────
+  const ok = await mockPayment(provider, info);
+  if (!ok) return;
+
+  const now = Date.now();
+  const newExpiry = (isSubscriptionActive() ? currentSubscription.expiresAt : now) + info.days * 86400000;
+  try {
+    await fbDb.collection('subscriptions').doc(currentFamilyId).set({
+      familyId: currentFamilyId,
+      plan: plan,
+      status: 'active',
+      startedAt: (currentSubscription && currentSubscription.startedAt) ? currentSubscription.startedAt : now,
+      expiresAt: newExpiry,
+      paidByUid: currentUser.uid,
+      paymentProvider: provider || 'none',
+      updatedAt: now
+    }, { merge: true });
+    closePlanModal();
+    await loadFamilyData(currentFamilyId);
+    renderSettingsTab();
+    refreshSubGate();
+    alert(`${info.name} 구독이 시작되었어요! (${info.days}일)`);
+  } catch (e) {
+    console.error(e); alert('구독 처리에 실패했어요.');
+  }
+}
+
+// 결제 모킹 (실제 결제 대신 확인창) — 향후 실제 PG로 교체
+function mockPayment(provider, info) {
+  const label = provider === 'kakaopay' ? '카카오페이'
+              : provider === 'naverpay' ? '네이버페이'
+              : '카드결제';
+  return Promise.resolve(
+    confirm(`[데모] ${label}로 ${info.name} ${info.price.toLocaleString()}원을 결제할까요?\n\n(실제 결제는 연동 예정이며, 지금은 구독 상태만 활성화돼요.)`)
+  );
+}
+
+// 플랜 변경/구독 화면 열기 (owner 전용)
+function openPlanModal() {
+  if (!isOwner()) { alert('플랜 변경은 대표 보호자만 할 수 있어요.'); return; }
+  document.getElementById('plan-modal').classList.add('show');
+}
+function closePlanModal() {
+  document.getElementById('plan-modal').classList.remove('show');
+}
+
+// 가족 구성원 제거 (owner 전용)
+async function removeMember(uid) {
+  if (!isOwner()) { alert('구성원 제거는 대표 보호자만 할 수 있어요.'); return; }
+  if (uid === currentUser.uid) { alert('본인은 제거할 수 없어요.'); return; }
+  const m = familyMembers.find(x => x.uid === uid);
+  if (!confirm(`${(m && m.name) || '이 구성원'}님을 가족에서 제거할까요?`)) return;
+  try {
+    await fbDb.collection('familyMembers').doc(currentFamilyId + '_' + uid).delete();
+    await fbDb.collection('users').doc(uid).set({ familyId: null }, { merge: true });
+    await loadFamilyData(currentFamilyId);
+    renderSettingsTab();
+  } catch (e) {
+    console.error(e); alert('제거에 실패했어요.');
+  }
+}
+
+// 구독 만료 시 서비스 제한 UI 갱신
+function refreshSubGate() {
+  const banner = document.getElementById('sub-expired-banner');
+  if (!banner) return;
+  if (currentFamilyId && !isSubscriptionActive()) {
+    banner.style.display = 'block';
+    banner.innerHTML = isOwner()
+      ? '⚠️ 구독이 만료되었어요. 가족 모두의 서비스가 제한됩니다. <b onclick="switchTab(\'settings\')" style="text-decoration:underline;cursor:pointer;">구독하기</b>'
+      : '⚠️ 구독이 만료되었어요. 대표 보호자에게 구독을 요청해주세요.';
+  } else {
+    banner.style.display = 'none';
+  }
+}
+
+
 let authMode = 'login'; // 'login' | 'signup'
 function toggleAuthMode() {
   authMode = (authMode === 'login') ? 'signup' : 'login';
@@ -1293,10 +1455,15 @@ async function doJoinFamily() {
 }
 
 // ── 어르신 정보 등록 화면 ──
-let esRel = '', esPlace = '';
+let esRel = '', esPlace = '', esSex = '';
 function pickRel(el) {
   esRel = el.dataset.rel;
   document.querySelectorAll('.es-rel').forEach(c => c.classList.toggle('selected', c === el));
+  checkElderReady();
+}
+function pickSex(el) {
+  esSex = el.dataset.sex;
+  document.querySelectorAll('.es-sex').forEach(c => c.classList.toggle('selected', c === el));
   checkElderReady();
 }
 function pickPlace(el) {
@@ -1308,7 +1475,7 @@ function pickPlace(el) {
 function checkElderReady() {
   const name = document.getElementById('es-name').value.trim();
   const age = document.getElementById('es-age').value.trim();
-  let ok = name && age && esRel && esPlace;
+  let ok = name && age && esSex && esRel && esPlace;
   if (esPlace === 'facility') {
     ok = ok && document.getElementById('es-facility').value.trim();
   }
@@ -1325,7 +1492,7 @@ async function saveElderInfo() {
   } else {
     meta = `${age}세 · 자택 거주`;
   }
-  const elder = { name, age, rel: esRel, meta };
+  const elder = { name, age, sex: esSex, rel: esRel, meta };
 
   const btn = document.getElementById('es-save-btn');
   btn.disabled = true; btn.textContent = '저장 중...';
@@ -1363,6 +1530,8 @@ function editElderInfo() {
   if (e) {
     document.getElementById('es-name').value = e.name || '';
     document.getElementById('es-age').value = e.age || '';
+    esSex = e.sex || '';
+    document.querySelectorAll('.es-sex').forEach(c => c.classList.toggle('selected', c.dataset.sex === esSex));
     esRel = e.rel || '';
     document.querySelectorAll('.es-rel').forEach(c => c.classList.toggle('selected', c.dataset.rel === esRel));
     if ((e.meta || '').includes('자택')) {
@@ -1429,6 +1598,11 @@ function goElderHome() {
 
 // ── Worker 설정 ─────────────────────────────────────────────
 function goCallScreen() {
+  // 구독 만료 시 가족 전체 서비스 제한
+  if (currentFamilyId && !isSubscriptionActive()) {
+    alert('구독이 만료되어 통화를 이용할 수 없어요.\n대표 보호자가 구독을 갱신하면 다시 이용할 수 있어요.');
+    return;
+  }
   if (!GEMINI_KEY && !proxySkip) {
     document.getElementById('proxy-input').value = '';
     document.getElementById('api-modal').classList.add('show');
@@ -1913,9 +2087,21 @@ async function callGemini(messages, maxTokens = 800) {
       parts: [{ text: m.content }],
     }));
 
+  // 어르신 성별/이름에 맞는 호칭 지시문 동적 생성
+  let honorific = '';
+  const elderName = (elderProfile && elderProfile.name) ? elderProfile.name : '';
+  if (elderProfile && elderProfile.sex === 'male') {
+    honorific = `\n\n[호칭 — 매우 중요]\n이 어르신은 남성(할아버지)입니다. 반드시 "할아버지"라고만 부르세요. 절대 "할머니"라고 부르면 안 됩니다.`;
+  } else if (elderProfile && elderProfile.sex === 'female') {
+    honorific = `\n\n[호칭 — 매우 중요]\n이 어르신은 여성(할머니)입니다. 반드시 "할머니"라고만 부르세요. 절대 "할아버지"라고 부르면 안 됩니다.`;
+  } else {
+    honorific = `\n\n[호칭]\n성별이 확실하지 않으면 "어르신"이라고 부르세요. "할머니/할아버지"를 마음대로 추측하지 마세요.`;
+  }
+  if (elderName) honorific += `\n어르신 성함은 "${elderName}"님입니다. 필요할 때 성함을 불러드려도 좋아요.`;
+
   const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
   const body = JSON.stringify({
-    system_instruction: { parts: [{ text: SYSTEM }] },
+    system_instruction: { parts: [{ text: SYSTEM + honorific }] },
     contents,
     generationConfig: {
       maxOutputTokens: maxTokens,
@@ -1982,6 +2168,7 @@ function renderChildReports() {
   renderLogsTab();
   renderAnalysisTab();
   renderSettingsTab();
+  refreshSubGate();
 }
 
 // 자녀가 처음 들어왔는데 리포트가 없으면 시연용 데모 데이터를 채움
@@ -2267,34 +2454,84 @@ function renderWeekChart(id, data, color, unit) {
   }).join('');
 }
 
-// ── 탭 4: 설정 (정적, 프로필만 업데이트) ──
+// ── 탭 4: 설정 ──
 function renderSettingsTab() {
-  // 가족 구성원 목록
+  const owner = isOwner();
+
+  // 구독 카드
+  renderSubscriptionCard();
+
+  // 가족 구성원 목록 (owner는 member 제거 버튼 표시)
   const card = document.getElementById('family-members-card');
   if (card) {
     if (familyMembers && familyMembers.length > 0) {
       card.innerHTML = familyMembers.map(m => {
         const isMe = m.uid === (currentUser && currentUser.uid);
         const initial = (m.name || '?').charAt(0);
-        const badge = m.role === 'owner' ? '<div class="fam-badge">대표 보호자</div>' : '';
+        let right = '';
+        if (m.role === 'owner') right = '<div class="fam-badge">대표 보호자</div>';
+        else if (owner && !isMe) right = `<button class="fam-remove" onclick="removeMember('${m.uid}')">제거</button>`;
         return `<div class="fam-row">
           <div class="fam-initial">${escHtml(initial)}</div>
           <div style="flex:1;">
             <div class="fam-name">${escHtml(m.name || '보호자')}${isMe ? ' (본인)' : ''}</div>
             <div class="fam-role">${m.role === 'owner' ? '대표 보호자' : '가족 구성원'}</div>
           </div>
-          ${badge}
+          ${right}
         </div>`;
       }).join('');
     } else {
       card.innerHTML = '<div class="fam-row"><div class="fam-name">아직 연결된 가족이 없어요</div></div>';
     }
   }
-  // 초대 코드 + 링크
+
+  // 초대 코드 + 링크 (공유는 owner만)
   const codeEl = document.getElementById('invite-code-text');
   const linkEl = document.getElementById('invite-link-text');
   if (codeEl) codeEl.textContent = currentFamilyCode || 'KOKO-XXXXX';
   if (linkEl && currentFamilyCode) linkEl.textContent = '초대 링크: ' + buildInviteLink();
+  const inviteBtn = document.getElementById('invite-share-btn');
+  if (inviteBtn) {
+    inviteBtn.style.display = owner ? 'block' : 'none';
+  }
+  const inviteCard = document.getElementById('invite-card-wrap');
+  if (inviteCard) inviteCard.style.opacity = owner ? '1' : '0.55';
+}
+
+// 구독 카드 렌더링 (owner/member 구분)
+function renderSubscriptionCard() {
+  const box = document.getElementById('sub-card-dynamic');
+  if (!box) return;
+  const owner = isOwner();
+  const active = isSubscriptionActive();
+  const plan = currentSubscription ? currentSubscription.plan : 'free';
+  const info = PLAN_INFO[plan] || PLAN_INFO.free;
+  const days = subDaysLeft();
+
+  const statusTxt = active
+    ? `<span style="color:#3BA776;">이용중</span>`
+    : `<span style="color:#D9534F;">만료됨</span>`;
+  const expiry = currentSubscription && currentSubscription.expiresAt
+    ? new Date(currentSubscription.expiresAt).toISOString().slice(0,10) : '-';
+
+  let actionHtml = '';
+  if (owner) {
+    actionHtml = active
+      ? `<div class="sub-manage" onclick="openPlanModal()">플랜 변경 / 연장 ›</div>`
+      : `<button class="btn-big" style="margin-top:10px;padding:13px;" onclick="openPlanModal()">구독하기</button>`;
+  } else {
+    actionHtml = `<div style="font-size:13px;color:var(--gray);margin-top:8px;">결제·플랜 변경은 대표 보호자만 가능해요.</div>`;
+  }
+
+  box.innerHTML = `
+    <div class="sub-top">
+      <div class="sub-icon">🎗️</div>
+      <div class="sub-name">${escHtml(info.name)}</div>
+      <div class="sub-status">${statusTxt}</div>
+    </div>
+    <div class="sub-price">${info.price > 0 ? '월 ' + info.price.toLocaleString() + '원 · ' : ''}${active ? `만료 ${expiry} (${days}일 남음)` : '서비스가 제한되었어요'}</div>
+    ${actionHtml}
+  `;
 }
 
 // 초대 링크 생성 (현재 접속 주소 기준)
@@ -2303,8 +2540,9 @@ function buildInviteLink() {
   return base + '?join=' + (currentFamilyCode || '');
 }
 
-// 초대 코드/링크 공유
+// 초대 코드/링크 공유 (owner 전용)
 function shareInvite() {
+  if (!isOwner()) { alert('가족 초대는 대표 보호자만 할 수 있어요.'); return; }
   const link = buildInviteLink();
   const text = `코코링 가족 초대\n코드: ${currentFamilyCode}\n링크: ${link}`;
   if (navigator.share) {
