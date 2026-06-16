@@ -1142,9 +1142,26 @@ window.addEventListener('load', () => {
   });
 });
 
-// 로그인 후 라우팅: 가족이 있으면 역할선택, 없으면 가족 만들기/참여 화면
+// 로그인 후 라우팅: 새로고침이면 보던 화면으로, 아니면 가족이 있으면 역할선택, 없으면 가족 만들기/참여 화면
 function routeAfterLogin() {
+  let lastScreen = null, lastRole = null;
+  try {
+    lastScreen = sessionStorage.getItem('kokoring_last_screen');
+    lastRole = sessionStorage.getItem('kokoring_user_role');
+  } catch (e) {}
+
   if (currentFamilyId) {
+    // 가족에 이미 소속된 상태 — 마지막으로 보던 화면이 유효하면 그대로 복귀
+    if ((lastScreen === 'elder-home' || lastScreen === 'child-screen') && lastRole) {
+      userRole = lastRole;
+      enterApp();
+      return;
+    }
+    if (lastScreen === 'life-archive-screen' && lastRole) {
+      userRole = lastRole;
+      showScreen('life-archive-screen');
+      return;
+    }
     showScreen('login-screen');   // 역할 선택
   } else {
     // 초대 링크(?join=코드)로 들어온 경우 → 코드 미리 채우고 참여 화면
@@ -1231,7 +1248,7 @@ async function loadFamilyData(familyId) {
     // 통화기록/브리핑 (reports where familyId) — familyId 기준 공유
     const snap = await fbDb.collection('reports')
       .where('familyId', '==', familyId).limit(100).get();
-    reportList = snap.docs.map(d => d.data())
+    reportList = snap.docs.map(d => Object.assign({ _id: d.id }, d.data()))
       .sort((a, b) => (b.생성시각 || 0) - (a.생성시각 || 0));
 
     // 가족 구성원 목록
@@ -1488,6 +1505,7 @@ document.addEventListener('input', (e) => {
 
 function startApp() {
   userRole = selectedRole;
+  try { sessionStorage.setItem('kokoring_user_role', userRole); } catch (e) {}
   // 어르신/자녀 모두 가족이 있어야 진입 가능
   if (!currentFamilyId) {
     showScreen('family-choice');
@@ -1504,6 +1522,7 @@ function startApp() {
 // ── 가족 만들기/참여 ────────────────────────────────────────
 function goCreateFamily() {
   userRole = 'child';   // 가족 만드는 사람은 보호자
+  try { sessionStorage.setItem('kokoring_user_role', userRole); } catch (e) {}
   showScreen('elder-setup');
 }
 
@@ -1518,6 +1537,7 @@ async function doJoinFamily() {
   try {
     await joinFamilyByCode(code);
     userRole = 'child';
+    try { sessionStorage.setItem('kokoring_user_role', userRole); } catch (e) {}
     enterApp();   // 자녀 화면으로
   } catch (e) {
     errEl.textContent = e.message || '참여에 실패했어요. 코드를 확인해주세요.';
@@ -1650,6 +1670,10 @@ function logout() {
   userName = ''; userRole = ''; selectedRole = '';
   elderProfile = null; reportList = [];
   currentFamilyId = null; currentFamilyCode = ''; currentMemberRole = ''; familyMembers = [];
+  try {
+    sessionStorage.removeItem('kokoring_last_screen');
+    sessionStorage.removeItem('kokoring_user_role');
+  } catch (e) {}
   document.getElementById('role-elder').classList.remove('selected');
   document.getElementById('role-child').classList.remove('selected');
   document.getElementById('start-btn').disabled = true;
@@ -1663,6 +1687,11 @@ function logout() {
 function showScreen(id) {
   document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+  // 새로고침 시 복귀할 화면 기억 (통화 중/설정 중간 화면은 제외 — 다시 들어가면 위험하거나 의미 없음)
+  const RESTORABLE = ['elder-home', 'child-screen', 'life-archive-screen'];
+  if (RESTORABLE.includes(id)) {
+    try { sessionStorage.setItem('kokoring_last_screen', id); } catch (e) {}
+  }
 }
 
 function goElderHome() {
@@ -2788,7 +2817,7 @@ function renderBriefCard(r) {
       </div>
       ${renderCognition(r)}
       ${r.위험신호 && r.위험신호 !== '없음' ? `<div class="report-signal" style="margin-top:14px;">⚠ ${escHtml(r.위험신호)}</div>` : ''}
-      ${r.사진 ? `<div style="margin-top:16px;"><div style="font-size:13px;font-weight:700;color:#16243A;margin-bottom:8px;">📸 오늘 어르신 모습</div><img src="${r.사진}" style="width:100%;border-radius:14px;display:block;" /></div>` : ''}
+      ${r.사진 ? `<div style="margin-top:16px;"><div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;"><div style="font-size:13px;font-weight:700;color:#16243A;">📸 오늘 어르신 모습</div>${isOwner() && r._id ? `<button onclick="event.stopPropagation();deletePhoto('${r._id}')" style="border:none;background:none;color:#D9534F;font-size:13px;font-weight:700;cursor:pointer;padding:4px 6px;">🗑 사진 삭제</button>` : ''}</div><img src="${r.사진}" style="width:100%;border-radius:14px;display:block;" /></div>` : ''}
       ${r.대화내용 ? `<details style="margin-top:14px;"><summary style="font-size:13px;color:var(--green);cursor:pointer;font-weight:700;">💬 실제 대화 내용 보기</summary><div style="font-size:13px;color:#555;line-height:21px;margin-top:10px;white-space:pre-wrap;background:var(--bg);border-radius:12px;padding:12px;">${escHtml(r.대화내용)}</div></details>` : ''}
     </div>`;
 }
@@ -2846,6 +2875,29 @@ function openLogDetail(date, time) {
 }
 function closeDetail() {
   document.getElementById('detail-modal').classList.remove('show');
+}
+
+// 가족 대표자(owner)가 통화 사진 삭제
+async function deletePhoto(reportId) {
+  if (!isOwner()) { alert('사진 삭제는 대표 보호자만 할 수 있어요.'); return; }
+  if (!confirm('사진을 삭제할까요? 삭제하면 되돌릴 수 없어요.')) return;
+  try {
+    await fbDb.collection('reports').doc(reportId).update({
+      사진: firebase.firestore.FieldValue.delete()
+    });
+    // 로컬 캐시 갱신
+    const r = reportList.find(x => x._id === reportId);
+    if (r) delete r.사진;
+    // 현재 보이는 화면들 다시 그리기
+    if (document.getElementById('detail-modal').classList.contains('show') && r) {
+      document.getElementById('detail-content').innerHTML = renderBriefCard(r);
+    }
+    renderHomeTab();
+    renderLogsTab();
+  } catch (e) {
+    console.error('사진 삭제 실패:', e);
+    alert('사진을 삭제하지 못했어요. 다시 시도해 주세요.');
+  }
 }
 
 // ── 탭 3: AI 분석 ──
