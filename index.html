@@ -1017,7 +1017,7 @@ function getNextKey() {
 }
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v5.3.0';
+const APP_VERSION = 'v5.3.1';
 const APP_VERSION_DATE = '2026-06-16';
 
 let userName = '';
@@ -2116,6 +2116,13 @@ function speak(text) {
     utter.onend = finish;
     utter.onerror = finish;
     window.speechSynthesis.speak(utter);
+
+    // 안전망: 일부 브라우저(특히 모바일)에서 onend/onerror가 발동하지 않는
+    // 알려진 버그가 있음. 그러면 kokoSpeaking이 영원히 true로 남아 음성인식이
+    // 다시 시작되지 않으므로, 글자수 기반 예상 발화시간 + 여유시간이 지나면
+    // 강제로 finish()를 호출해 통화가 멈추지 않게 함.
+    const expectedMs = Math.max(3000, text.length * 220 / utter.rate);
+    setTimeout(() => { if (!finished) { console.warn('TTS onend 미발동 — 안전망으로 강제 종료'); finish(); } }, expectedMs + 4000);
   });
 }
 
@@ -2281,6 +2288,8 @@ async function onElderSpeech(text) {
     // 혹시라도 키가 비어버린 비상 상황이면, 가짜 대화로 흉내내지 않고 통화를 정직하게 끝냄.
     console.error('GEMINI_KEY가 없는 상태로 통화가 진행됨');
     addTranscript('koko', '죄송해요, 지금 코코와 연결이 끊겼어요. 잠시 후 다시 전화해주세요.');
+    document.getElementById('mic-btn').disabled = false;
+    processing = false;
     endCall();
     return;
   }
