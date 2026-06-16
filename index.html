@@ -178,6 +178,19 @@
   .type-input { flex: 1; border: none; border-radius: 22px; padding: 12px 16px; font-size: 15px; outline: none; font-family: inherit; }
   .type-send { width: 44px; height: 44px; border-radius: 50%; background: white; border: none; font-size: 18px; cursor: pointer; flex-shrink: 0; }
 
+  /* iOS 스타일 코코 목소리 음량 슬라이더 */
+  .volume-bar { display: none; width: 100%; gap: 10px; align-items: center; padding: 2px 4px; }
+  .volume-bar.show { display: flex; }
+  .volume-icon { font-size: 15px; color: rgba(255,255,255,0.75); flex-shrink: 0; width: 18px; text-align: center; }
+  .volume-slider { -webkit-appearance: none; appearance: none; flex: 1; height: 4px; border-radius: 2px;
+    background: linear-gradient(to right, #ffffff var(--vol-pct, 80%), rgba(255,255,255,0.25) var(--vol-pct, 80%));
+    outline: none; cursor: pointer; }
+  .volume-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 22px; height: 22px;
+    border-radius: 50%; background: #ffffff; box-shadow: 0 1px 4px rgba(0,0,0,0.35); cursor: pointer; }
+  .volume-slider::-moz-range-thumb { width: 22px; height: 22px; border-radius: 50%; background: #ffffff;
+    border: none; box-shadow: 0 1px 4px rgba(0,0,0,0.35); cursor: pointer; }
+  .volume-slider::-moz-range-track { height: 4px; border-radius: 2px; background: rgba(255,255,255,0.25); }
+
   /* ── 통화 종료 후 ── */
   .end-screen-body { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 32px; gap: 16px; background: linear-gradient(180deg, var(--green) 0%, #16243A 100%); }
   .end-icon { font-size: 56px; }
@@ -630,8 +643,16 @@
         <button class="type-send" onclick="sendTyped()">📤</button>
       </div>
 
+      <!-- 코코 목소리 음량 슬라이더 (휴대폰 물리 음량 버튼은 미디어 음량만 조절되므로 보조용) -->
+      <div class="volume-bar" id="volume-bar">
+        <div class="volume-icon">🔈</div>
+        <input class="volume-slider" id="volume-slider" type="range" min="0" max="100" value="80"
+          oninput="setKokoVolume(this.value)" />
+        <div class="volume-icon">🔊</div>
+      </div>
+
       <div class="control-row">
-        <button class="side-btn" id="sound-btn" onclick="toggleSound()" title="코코 목소리 켜기/끄기">🔊</button>
+        <button class="side-btn" id="sound-btn" onclick="toggleSound()" title="코코 목소리 음량 조절">🔊</button>
         <button class="mic-btn" id="mic-btn" onclick="toggleListening()">🎤</button>
         <button class="side-btn" id="keyboard-btn" onclick="toggleKeyboard()" title="글자로 대답하기">⌨️</button>
       </div>
@@ -1017,7 +1038,7 @@ function getNextKey() {
 }
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v5.3.4';
+const APP_VERSION = 'v5.4.0';
 const APP_VERSION_DATE = '2026-06-17';
 
 let userName = '';
@@ -1068,6 +1089,7 @@ let turnCount = 0;
 let callStartTime = 0;
 let currentCallMode = 'normal'; // 'normal' | 'memory' — 추억대화 모드
 let soundOn = true; // 코코 목소리 켜기/끄기
+let kokoVolume = 0.8; // 코코 목소리 음량 (0~1) — utter.volume에 직접 반영됨
 
 const SYSTEM = `당신은 "코코"입니다. 어르신을 매일 찾아오는 AI 손주 같은 친구예요.
 
@@ -2133,6 +2155,7 @@ function speak(text) {
     utter.lang = 'ko-KR';
     utter.rate = 0.95;
     utter.pitch = 1.05;
+    utter.volume = kokoVolume;
     const voices = window.speechSynthesis.getVoices();
     const koVoice = voices.find(v => v.lang === 'ko-KR');
     if (koVoice) utter.voice = koVoice;
@@ -2157,12 +2180,23 @@ function speak(text) {
   });
 }
 
-// ── 접근성: 소리 켜기/끄기 ───────────────────────────────────
+// ── 접근성: 코코 목소리 음량 슬라이더 펼치기/접기 ─────────────
+// 휴대폰 물리 음량 버튼은 미디어 음량만 조절되고 코코 목소리에는 세부적으로
+// 닿지 않으므로, 화면 안에서 직접 코코 목소리 크기를 조절하는 보조 슬라이더.
 function toggleSound() {
-  soundOn = !soundOn;
+  const bar = document.getElementById('volume-bar');
+  const show = !bar.classList.contains('show');
+  bar.classList.toggle('show', show);
+  document.getElementById('sound-btn').classList.toggle('active', show);
+}
+
+function setKokoVolume(val) {
+  kokoVolume = Math.max(0, Math.min(100, Number(val))) / 100;
+  soundOn = kokoVolume > 0; // 0까지 내리면 자연스럽게 무음 처리
   if (!soundOn) window.speechSynthesis.cancel();
-  document.getElementById('sound-btn').textContent = soundOn ? '🔊' : '🔇';
-  document.getElementById('sound-btn').classList.toggle('active', !soundOn);
+  document.getElementById('volume-slider').style.setProperty('--vol-pct', val + '%');
+  const icon = document.getElementById('sound-btn');
+  icon.textContent = kokoVolume === 0 ? '🔇' : (kokoVolume < 0.5 ? '🔉' : '🔊');
 }
 
 // ── 접근성: 키보드 입력 모드 ─────────────────────────────────
@@ -2215,6 +2249,8 @@ async function startCall() {
   document.getElementById('mic-btn').disabled = false;
   document.getElementById('mic-btn').classList.add('auto-on');
   document.getElementById('transcript-area').innerHTML = '';
+  document.getElementById('volume-bar').classList.remove('show');
+  document.getElementById('sound-btn').classList.remove('active');
   setStatus('연결 중...');
 
   // "끼어들기" 보조 기능(getUserMedia로 별도 마이크 스트림을 잡는 음량 감지)은
