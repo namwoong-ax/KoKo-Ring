@@ -381,6 +381,8 @@
   /* ── 모달 ── */
   #api-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
   #api-modal.show { display: flex; }
+  #other-family-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
+  #other-family-modal.show { display: flex; }
   .modal-box { background: white; border-radius: 20px; padding: 24px; width: 100%; max-width: 360px; }
   .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
   .modal-desc { font-size: 13px; color: var(--gray); line-height: 20px; margin-bottom: 16px; }
@@ -980,6 +982,18 @@
   </div>
 </div>
 
+<!-- 다른 가족(어르신) 코드로 합류하는 모달 -->
+<div id="other-family-modal">
+  <div class="modal-box">
+    <div class="modal-title">다른 가족에 합류하기</div>
+    <div class="modal-desc">예) 아빠 가족의 대표 보호자이면서, 장인어른 가족에는 구성원으로 함께할 수 있어요. 받으신 가족 초대 코드를 입력해주세요.</div>
+    <input class="modal-input" id="other-family-code" type="text" placeholder="예) KOKO-7X92A" style="text-transform:uppercase; letter-spacing:1px; font-weight:700;" />
+    <div id="other-family-error" style="color:#D9534F; font-size:13px; margin:-4px 0 10px;display:none;"></div>
+    <button class="btn-big" id="other-family-btn" onclick="joinOtherFamily()" style="margin-bottom:0;">합류하기</button>
+    <div class="modal-close" onclick="closeOtherFamilyModal()">취소</div>
+  </div>
+</div>
+
 <script>
 // ── 전역 상태 ───────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════
@@ -1004,7 +1018,7 @@ function getNextKey() {
 }
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v5.1.0';
+const APP_VERSION = 'v5.2.0';
 const APP_VERSION_DATE = '2026-06-16';
 
 let userName = '';
@@ -1456,6 +1470,35 @@ function openPlanModal() {
 }
 function closePlanModal() {
   document.getElementById('plan-modal').classList.remove('show');
+}
+
+// 다른 가족(어르신)에 코드로 합류 — 이미 다른 가족의 owner/member여도 추가로 합류 가능
+function openOtherFamilyModal() {
+  document.getElementById('other-family-code').value = '';
+  document.getElementById('other-family-error').style.display = 'none';
+  document.getElementById('other-family-modal').classList.add('show');
+}
+function closeOtherFamilyModal() {
+  document.getElementById('other-family-modal').classList.remove('show');
+}
+async function joinOtherFamily() {
+  const code = document.getElementById('other-family-code').value.trim();
+  const errEl = document.getElementById('other-family-error');
+  errEl.style.display = 'none';
+  if (!code) { errEl.textContent = '가족 코드를 입력해주세요.'; errEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('other-family-btn');
+  btn.disabled = true; btn.textContent = '합류 중...';
+  try {
+    await joinFamilyByCode(code);
+    closeOtherFamilyModal();
+    renderChildReports(); // 가족 전환 칩 포함 전체 화면 갱신
+  } catch (e) {
+    errEl.textContent = e.message || '합류에 실패했어요. 코드를 확인해주세요.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = '합류하기';
+  }
 }
 
 // 가족 구성원 제거 (owner 전용)
@@ -2865,10 +2908,23 @@ function renderFamilySwitcher() {
   const wrap = document.getElementById('family-switcher');
   if (!wrap) return;
 
-  // 1개뿐이면(가장 흔한 경우) 굳이 안 보여줌
+  const addChips = `<div onclick="goCreateFamily()" style="
+    display:inline-flex; align-items:center; gap:4px;
+    padding:8px 14px; margin-right:8px; border-radius:20px;
+    font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;
+    background:#fff; border:1.5px dashed #C0C8D2; color:#8A93A0;
+  ">+ 새 어르신</div><div onclick="openOtherFamilyModal()" style="
+    display:inline-flex; align-items:center; gap:4px;
+    padding:8px 14px; border-radius:20px;
+    font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;
+    background:#fff; border:1.5px dashed #C0C8D2; color:#8A93A0;
+  ">🔑 다른 가족 코드로 합류</div>`;
+
+  // 가족이 1개뿐이면 다른 사람들 칩은 안 보이지만, "추가" 버튼들은 항상 보여줌
+  // (아빠 가족 owner이면서 장인어른 가족엔 구성원으로 추가될 수 있어야 하므로)
   if (!myFamilies || myFamilies.length <= 1) {
-    wrap.style.display = 'none';
-    wrap.innerHTML = '';
+    wrap.style.display = 'block';
+    wrap.innerHTML = addChips;
     return;
   }
 
@@ -2882,12 +2938,7 @@ function renderFamilySwitcher() {
       background:${active ? '#16243A' : '#F0F2F5'};
       color:${active ? '#fff' : '#5B6470'};
     ">${escHtml(f.elderInitial)} ${escHtml(f.elderName)}${f.role === 'owner' ? '' : ' · 구성원'}</div>`;
-  }).join('') + `<div onclick="goCreateFamily()" style="
-    display:inline-flex; align-items:center; gap:4px;
-    padding:8px 14px; border-radius:20px;
-    font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;
-    background:#fff; border:1.5px dashed #C0C8D2; color:#8A93A0;
-  ">+ 새 어르신</div>`;
+  }).join('') + addChips;
 }
 
 function renderHomeTab() {
