@@ -1017,7 +1017,7 @@ function getNextKey() {
 }
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v5.3.2';
+const APP_VERSION = 'v5.3.3';
 const APP_VERSION_DATE = '2026-06-17';
 
 let userName = '';
@@ -1964,14 +1964,18 @@ function setupSpeechRecognition() {
       return; // 재시작하지 않고 멈춤
     }
 
-    // 끊겼는데 아직 못 보낸 말이 남아있으면 마저 처리
-    if (pendingSpeech.trim() && !processing && !kokoSpeaking) {
-      flushSpeech();
+    // 끊겼는데 아직 못 보낸 말이 남아있으면, 곧바로 AI에게 보내지 않고
+    // 음성인식만 재시작해서 이어붙임. 브라우저가 중간에 자체적으로 끊는 경우가
+    // 흔한데, 그때마다 즉시 flush하면 한 문장이 여러 조각으로 쪼개져 AI에게
+    // 따로따로 전달되는 문제가 있었음. "말이 진짜 끝났다"는 판단은 오직
+    // silenceTimer(무음 지속시간)만 담당하도록 일관되게 함.
+    if (autoMode && !callEnded && !kokoSpeaking && !processing) {
+      setTimeout(() => startListening(true), 200);
       return;
     }
-    // 자동 모드이고, 통화 중이고, 코코가 말하는 중이 아니면 → 다시 듣기 시작
-    if (autoMode && !callEnded && !kokoSpeaking && !processing) {
-      setTimeout(() => startListening(), 250);
+    // 자동 모드가 아니거나 통화가 끝난 상태에서 남은 말이 있다면 마저 처리
+    if (pendingSpeech.trim() && !processing && !kokoSpeaking) {
+      flushSpeech();
     }
   };
 }
@@ -2047,11 +2051,15 @@ function interruptKoko() {
 }
 
 // 듣기 시작 (자동/수동 공통)
-function startListening() {
+// continuing=true면 이전에 듣던 말(pendingSpeech)을 지우지 않고 이어붙임
+// (브라우저가 중간에 자체적으로 인식을 끊었다가 재시작하는 경우)
+function startListening(continuing) {
   if (!recognition || callEnded || kokoSpeaking || processing) return;
   if (isListening) return;
-  pendingSpeech = '';
-  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+  if (!continuing) {
+    pendingSpeech = '';
+    if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+  }
   try {
     recognition.start();
     setListening(true);
