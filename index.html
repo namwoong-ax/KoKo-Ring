@@ -1038,7 +1038,7 @@ function getNextKey() {
 }
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v5.4.0';
+const APP_VERSION = 'v5.5.0';
 const APP_VERSION_DATE = '2026-06-17';
 
 let userName = '';
@@ -3223,37 +3223,67 @@ function computeCogScores() {
   return { total: totalScore, 언어, 기억, 반응, note, hasData };
 }
 
-// 주간 기분 (최근 7개 리포트 → 점수, 데이터 없는 날은 null로 비워둠)
-function getWeekMoods() {
-  const moodVal = { '밝음': 82, '보통': 68, '우울': 50, '불안': 55 };
-  const days = ['월','화','수','목','금','토','일'];
-  const recent = reportList.slice(0, 7).reverse();
-  return days.map((d, i) => ({
-    label: d,
-    val: recent[i] ? (moodVal[recent[i].감정] || 65) : null,
-  }));
-}
-function getWeekDurations() {
-  const days = ['월','화','수','목','금','토','일'];
-  const recent = reportList.slice(0, 7).reverse();
-  return days.map((d, i) => ({
-    label: d,
-    val: (recent[i] && recent[i].대화내용) ? Math.max(3, Math.round(recent[i].대화내용.length/120)) : null,
-  }));
+// 이번 주(월요일~일요일)의 실제 날짜 7개를 'YYYY-MM-DD' 문자열로 반환
+function getThisWeekDates() {
+  const today = new Date();
+  const dow = today.getDay(); // 0=일,1=월,...,6=토
+  const mondayOffset = dow === 0 ? -6 : 1 - dow; // 일요일이면 6일 전 월요일로
+  const monday = new Date(today);
+  monday.setDate(today.getDate() + mondayOffset);
+
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    dates.push(fmt(d));
+  }
+  return dates; // [월,화,수,목,금,토,일] 순서의 실제 날짜
 }
 
-// 막대 차트 렌더링 (데이터 없는 날은 빈 막대로 표시)
+// 주간 기분 (이번 주 월~일 실제 날짜에 해당하는 리포트만 매칭, 없는 날은 null)
+function getWeekMoods() {
+  const moodVal = { '밝음': 82, '보통': 68, '우울': 50, '불안': 55 };
+  const dayLabels = ['월','화','수','목','금','토','일'];
+  const weekDates = getThisWeekDates();
+  return dayLabels.map((label, i) => {
+    // 같은 날짜에 여러 통화가 있으면 그날의 평균 기분 점수를 사용
+    const sameDay = reportList.filter(r => r.날짜 === weekDates[i]);
+    if (sameDay.length === 0) return { label, val: null };
+    const scores = sameDay.map(r => moodVal[r.감정] || 65);
+    const avg = Math.round(scores.reduce((a,b)=>a+b,0) / scores.length);
+    return { label, val: avg };
+  });
+}
+function getWeekDurations() {
+  const dayLabels = ['월','화','수','목','금','토','일'];
+  const weekDates = getThisWeekDates();
+  return dayLabels.map((label, i) => {
+    // 같은 날짜에 여러 통화가 있으면 그날 통화 시간을 합산
+    const sameDay = reportList.filter(r => r.날짜 === weekDates[i]);
+    if (sameDay.length === 0) return { label, val: null };
+    const totalMin = sameDay.reduce((sum, r) =>
+      sum + (r.대화내용 ? Math.max(1, Math.round(r.대화내용.length/120)) : 0), 0);
+    return { label, val: totalMin };
+  });
+}
+
+// 막대 차트 렌더링 (데이터 없는 날은 빈 막대로 표시, 오늘에 해당하는 칸은 굵게 강조)
 function renderWeekChart(id, data, color, unit) {
   const validVals = data.map(d => d.val).filter(v => v != null);
   const hasAny = validVals.length > 0;
   const max = Math.max(...validVals, 1);
-  document.getElementById(id).innerHTML = data.map(d => {
+  // 오늘이 이번 주의 몇 번째 칸(0=월 ~ 6=일)인지 계산
+  const dow = new Date().getDay();
+  const todayIdx = dow === 0 ? 6 : dow - 1;
+  document.getElementById(id).innerHTML = data.map((d, i) => {
     const has = d.val != null;
     const h = has ? Math.max(12, (d.val / max) * 110) : 4;
+    const isToday = i === todayIdx;
     return `<div class="chart-col">
       <div class="chart-val">${has ? d.val + unit : '-'}</div>
       <div class="chart-bar" style="height:${h}px;background:${has ? color : '#E4E8EE'}"></div>
-      <div class="chart-label">${d.label}</div>
+      <div class="chart-label" style="${isToday ? 'font-weight:800;color:#16243A;' : ''}">${d.label}${isToday ? ' ·' : ''}</div>
     </div>`;
   }).join('') + (hasAny ? '' : `<div style="width:100%;text-align:center;color:var(--gray);font-size:13px;padding-top:8px;">아직 데이터가 없어요. 통화가 쌓이면 표시돼요.</div>`);
 }
