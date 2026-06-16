@@ -1017,7 +1017,7 @@ function getNextKey() {
 }
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v5.3.3';
+const APP_VERSION = 'v5.3.4';
 const APP_VERSION_DATE = '2026-06-17';
 
 let userName = '';
@@ -2315,8 +2315,14 @@ async function onElderSpeech(text) {
       }
       history.push({ role: 'assistant', content: reply });
     } catch(e) {
-      console.error('AI 응답 오류:', e);
-      reply = '죄송해요, 잘 못 들었어요. 다시 한번 말씀해주시겠어요?';
+      // 음성은 정확히 인식됐는데(text가 정상 전달됨) AI 서버 호출 자체가 실패한 경우.
+      // "잘 못 들었어요"라고 하면 음성인식 문제처럼 보여 혼동을 주므로, 통신 문제임을 명확히 함.
+      console.error('AI 응답 오류 (음성 인식은 정상, 서버 호출 실패):', e);
+      if (e && e.message === '429') {
+        reply = '죄송해요, 지금 사용량이 많아서 잠시 응답이 늦어지고 있어요. 잠시 후 다시 말씀해주시겠어요?';
+      } else {
+        reply = '죄송해요, 지금 코코 서버와 연결이 불안정해요. 잠시 후 다시 말씀해주시겠어요?';
+      }
     }
   } else {
     // 이 시점엔 API 키가 항상 있어야 정상(goCallScreen에서 미리 막음).
