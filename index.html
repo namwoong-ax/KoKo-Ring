@@ -455,6 +455,17 @@
     <div onclick="logout()" style="font-size:13px; color:var(--gray); margin-top:14px; cursor:pointer;">⇄ 다른 계정으로 로그인</div>
   </div>
 
+  <!-- ①-B 어르신 미등록 안내 (자녀가 아직 어르신 정보를 등록하지 않은 상태) -->
+  <div id="elder-not-ready" class="screen">
+    <div class="login-emoji koko-img" style="width:110px;height:95px;"></div>
+    <div class="login-title" style="font-size:22px;">아직 준비 중이에요</div>
+    <div class="login-sub" style="text-align:center; line-height:1.6;">
+      자녀(보호자)가 아직 어르신 정보를<br>등록하지 않았어요.<br><br>
+      가족 중 보호자에게 "자녀" 역할로 먼저<br>로그인해 어르신 정보를 등록해달라고<br>요청해주세요.
+    </div>
+    <button class="btn-big" onclick="logout()" style="margin-top:28px;">다른 계정으로 로그인</button>
+  </div>
+
   <!-- ①-A 가족 만들기 / 참여 선택 -->
   <div id="family-choice" class="screen">
     <div class="login-emoji koko-img" style="width:90px;height:78px;"></div>
@@ -1213,6 +1224,18 @@ function genFamilyCode() {
   return 'KOKO-' + code;
 }
 
+// 중복 없는 가족 코드 생성: Firestore에서 실제로 안 쓰이는 코드가 나올 때까지 재시도
+async function genUniqueFamilyCode() {
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const code = genFamilyCode();
+    const dup = await fbDb.collection('families').where('familyCode', '==', code).limit(1).get();
+    if (dup.empty) return code;
+    console.warn('가족 코드 충돌, 재생성 시도:', attempt + 1);
+  }
+  // 8번 연속 충돌은 거의 불가능하지만, 안전하게 타임스탬프를 섞어 마지막 시도
+  return genFamilyCode() + Date.now().toString(36).slice(-3).toUpperCase();
+}
+
 // ── 사용자 컨텍스트 로드 (소속 가족 확인) ───────────────────
 async function loadUserContext() {
   if (!currentUser) return;
@@ -1266,8 +1289,11 @@ async function loadFamilyData(familyId) {
 
 // ── 가족 만들기 (어르신 등록과 함께) ────────────────────────
 async function createFamilyWithElder(elderData) {
+  // 이 사용자가 이전에 다른 가족에 속해 있었다면, 유령 멤버십이 남지 않도록 먼저 정리
+  await leaveOldFamilyIfAny();
+
   const familyId = fbDb.collection('families').doc().id; // 새 ID
-  const code = genFamilyCode();
+  const code = await genUniqueFamilyCode();
   const batch = fbDb.batch();
 
   // 1) families
@@ -1306,6 +1332,33 @@ async function createFamilyWithElder(elderData) {
   await loadFamilyData(familyId);
 }
 
+// 가족 코드로 참여 ────────────────────────────────────────
+// 사용자가 이전에 다른 가족에 속해 있었다면 그 멤버십 문서를 정리한다.
+// (한 사용자가 동시에 여러 가족의 familyMembers로 남아있으면 구독/멤버 목록이 꼬이는 문제 방지)
+async function leaveOldFamilyIfAny() {
+  if (!currentUser) return;
+  try {
+    const userSnap = await fbDb.collection('users').doc(currentUser.uid).get();
+    const oldFamilyId = userSnap.exists ? userSnap.data().familyId : null;
+    if (!oldFamilyId) return;
+
+    const oldMemberRef = fbDb.collection('familyMembers').doc(oldFamilyId + '_' + currentUser.uid);
+    const oldMemberSnap = await oldMemberRef.get();
+    if (!oldMemberSnap.exists) return;
+
+    if (oldMemberSnap.data().role === 'owner') {
+      // owner가 가족을 떠나면 나머지 가족 전체가 고립되니, 여기서는 막고 알려준다.
+      // (가족 양도/삭제는 별도 플로우로 다뤄야 하는 더 민감한 동작이라 여기서 자동 처리하지 않음)
+      throw new Error('이미 대표 보호자로 등록된 가족이 있어요. 새 가족을 만들기 전에 기존 가족을 정리해주세요.');
+    }
+    await oldMemberRef.delete();
+  } catch (e) {
+    if (e && e.message && e.message.includes('대표 보호자')) throw e;
+    console.error('이전 가족 정리 실패:', e);
+    // 정리에 실패해도 새 가족 생성 자체를 막지는 않음(네트워크 일시 오류 등)
+  }
+}
+
 // ── 가족 코드로 참여 ────────────────────────────────────────
 async function joinFamilyByCode(code) {
   code = code.trim().toUpperCase();
@@ -1314,6 +1367,9 @@ async function joinFamilyByCode(code) {
   const q = await fbDb.collection('families').where('familyCode', '==', code).limit(1).get();
   if (q.empty) throw new Error('해당 코드의 가족을 찾을 수 없어요.');
   const familyId = q.docs[0].id;
+
+  // 이 사용자가 이전에 다른 가족에 속해 있었다면, 유령 멤버십이 남지 않도록 먼저 정리
+  await leaveOldFamilyIfAny();
 
   const myName = (await fbDb.collection('users').doc(currentUser.uid).get()).data().name || '보호자';
   const batch = fbDb.batch();
@@ -1518,6 +1574,7 @@ function startApp() {
     showScreen('elder-setup');
     return;
   }
+  // 어르신인데 아직 어르신 정보가 등록되지 않은 경우는 enterApp()의 가드가 처리함
   enterApp();
 }
 
@@ -1611,7 +1668,7 @@ async function saveElderInfo() {
     enterApp();
   } catch (e) {
     console.error(e);
-    alert('저장에 실패했어요. 인터넷 연결을 확인해주세요.');
+    alert(e && e.message ? e.message : '저장에 실패했어요. 인터넷 연결을 확인해주세요.');
   } finally {
     btn.disabled = false; btn.textContent = '등록하고 시작하기';
   }
@@ -1661,6 +1718,12 @@ function editElderInfo() {
 
 function enterApp() {
   if (userRole === 'elder') {
+    // 최종 안전장치: 어르신 정보가 아직 등록되지 않았으면 절대 어르신 홈으로 들어가지 않음
+    // (데모 이름으로 얼버무리지 않고 명확히 차단 화면을 보여줌)
+    if (!elderProfile || !elderProfile.name) {
+      showScreen('elder-not-ready');
+      return;
+    }
     showScreen('elder-home');
     // 자녀가 등록한 어르신 정보를 따라감
     const prof = getElderProfile();
@@ -2611,17 +2674,14 @@ async function callGemini(messages, maxTokens = 800) {
   }
   if (elderName) honorific += `\n어르신 성함은 "${elderName}"님입니다. 필요할 때 성함을 불러드려도 좋아요.`;
 
-  // [모델 테스트용] gemini-3-flash 사용 중 — 기존 gemini-2.5-flash-lite보다 품질은 높지만
-  // 무료 등급 한도가 더 박함(분당 10회, 일일 1500회). 문제 생기면 아래 모델명을 'gemini-2.5-flash-lite'로 되돌리면 됨.
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent';
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
   const body = JSON.stringify({
     system_instruction: { parts: [{ text: SYSTEM + honorific }] },
     contents,
     generationConfig: {
       maxOutputTokens: maxTokens,
       temperature: 0.9,
-      // Gemini 3 계열은 thinkingBudget을 지원하지 않고 thinkingLevel을 씀(완전 off 불가, minimal이 가장 빠름)
-      thinkingConfig: { thinkingLevel: 'minimal' },
+      thinkingConfig: { thinkingBudget: 0 },
     },
   });
 
