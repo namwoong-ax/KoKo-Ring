@@ -2600,14 +2600,17 @@ async function callGemini(messages, maxTokens = 800) {
   }
   if (elderName) honorific += `\n어르신 성함은 "${elderName}"님입니다. 필요할 때 성함을 불러드려도 좋아요.`;
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
+  // [모델 테스트용] gemini-3-flash 사용 중 — 기존 gemini-2.5-flash-lite보다 품질은 높지만
+  // 무료 등급 한도가 더 박함(분당 10회, 일일 1500회). 문제 생기면 아래 모델명을 'gemini-2.5-flash-lite'로 되돌리면 됨.
+  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash:generateContent';
   const body = JSON.stringify({
     system_instruction: { parts: [{ text: SYSTEM + honorific }] },
     contents,
     generationConfig: {
       maxOutputTokens: maxTokens,
       temperature: 0.9,
-      thinkingConfig: { thinkingBudget: 0 },
+      // Gemini 3 계열은 thinkingBudget을 지원하지 않고 thinkingLevel을 씀(완전 off 불가, minimal이 가장 빠름)
+      thinkingConfig: { thinkingLevel: 'minimal' },
     },
   });
 
