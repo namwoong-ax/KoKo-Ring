@@ -1018,7 +1018,7 @@ function getNextKey() {
 }
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v5.2.0';
+const APP_VERSION = 'v5.2.1';
 const APP_VERSION_DATE = '2026-06-16';
 
 let userName = '';
@@ -1945,10 +1945,19 @@ function setupSpeechRecognition() {
   };
 
   recognition.onerror = (e) => {
+    console.error('음성인식 오류:', e.error, e);
     if (autoMode && !callEnded && (e.error === 'no-speech' || e.error === 'aborted')) {
       return; // onend에서 재시작 처리
     }
     setListening(false);
+    // 사용자가 직접 알아야 하는 에러는 안내 문구를 보여줌
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      setStatus('마이크 권한이 차단됐어요. 브라우저 주소창 왼쪽 자물쇠 아이콘에서 마이크 권한을 허용해주세요.');
+    } else if (e.error === 'language-not-supported') {
+      setStatus('이 브라우저에서는 한국어 음성 인식을 지원하지 않아요. 크롬 브라우저를 사용해주세요.');
+    } else if (e.error === 'network') {
+      setStatus('음성 인식 서버 연결에 실패했어요. 인터넷 연결을 확인해주세요.');
+    }
   };
 
   recognition.onend = () => {
@@ -1978,6 +1987,9 @@ async function setupMicMonitor() {
     startVadLoop();
   } catch(e) {
     console.warn('마이크 음량 감지 설정 실패:', e);
+    if (e && (e.name === 'NotAllowedError' || e.name === 'PermissionDeniedError')) {
+      setStatus('마이크 권한이 차단됐어요. 브라우저 주소창 왼쪽 자물쇠 아이콘에서 마이크 권한을 허용해주세요.');
+    }
   }
 }
 
@@ -2042,7 +2054,7 @@ function startListening() {
     recognition.start();
     setListening(true);
   } catch(e) {
-    // 이미 시작된 경우 등은 무시
+    console.error('recognition.start() 실패:', e);
   }
 }
 
@@ -2173,6 +2185,9 @@ function addTranscript(role, text) {
 
 // ── 통화 흐름 ────────────────────────────────────────────────
 async function startCall() {
+  if (!recognition) {
+    alert('이 브라우저는 음성 인식을 지원하지 않아요. 크롬(Chrome) 브라우저로 다시 시도해주세요.\n(사파리·파이어폭스 일부 버전, 인앱 브라우저에서는 지원되지 않을 수 있어요)');
+  }
   callEnded = false;
   history = [];
   demoIndex = 0;
