@@ -665,6 +665,17 @@
 
         <div id="home-alert"></div>
 
+        <div class="ios-card" onclick="openLifeArchive()" style="cursor:pointer; background:linear-gradient(135deg,#2A3F5F 0%,#16243A 100%);">
+          <div style="display:flex; align-items:center; gap:14px;">
+            <div style="font-size:30px;">📖</div>
+            <div style="flex:1;">
+              <div style="font-size:16px; font-weight:800; color:white;">생애 기록관</div>
+              <div style="font-size:13px; color:#B9C4D6; margin-top:2px;">오늘의 안부가, 내일의 기억이 됩니다</div>
+            </div>
+            <div style="color:#8595B0; font-size:20px;">›</div>
+          </div>
+        </div>
+
         <div class="koko-msg">
           <div class="koko-msg-avatar koko-img"></div>
           <div class="koko-msg-text" id="home-koko-msg">오늘의 안부 소식을 준비하고 있어요.</div>
@@ -844,6 +855,22 @@
       </div>
     </div>
 
+  </div>
+
+  <!-- 생애 기록관 (Life Archive) -->
+  <div id="life-archive-screen" class="screen">
+    <div class="tab-scroll" style="padding:56px 20px 40px;">
+      <div class="es-back" onclick="closeLifeArchive()">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="#16243A" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+        <span>뒤로</span>
+      </div>
+      <div class="page-head">
+        <div class="page-eyebrow">코코링 · Life Archive</div>
+        <div class="page-title">📖 생애 기록관</div>
+        <div class="page-sub" id="la-subtitle">코코와의 대화에서 어르신의 삶을 기록해요</div>
+      </div>
+      <div id="la-content"></div>
+    </div>
   </div>
 
 </div>
@@ -2238,20 +2265,230 @@ ${transcript}
     }
   }
 
+  // 생애 기록관(Life Archive) 자동 추출 — 실패해도 통화 흐름엔 영향 없음
+  try {
+    await extractAndSaveLifeArchive(transcript);
+  } catch (e) {
+    console.error('생애 기록 추출 실패:', e);
+  }
+
   document.getElementById('end-title').textContent = '통화가 종료됐어요';
   document.getElementById('end-desc').innerHTML = '오늘도 코코와 즐거운 대화 나눠주셔서<br>감사해요! 자녀분께 브리핑을 전달했어요.';
 }
 
-function makeDemoReport(transcript) {
-  return {
-    상태: '안정',
-    감정: '밝음',
-    요약: '오늘 코코와 즐거운 대화를 나눴어요. 전반적으로 컨디션이 좋아 보이셨습니다.',
-    주요내용: ['음성으로 대화 진행', '특이사항 없음', '내일도 통화 예정'],
-    인지평가: { 시간인지:'정상', 장소인지:'정상', 단기기억:'정상', 계산:'평가안됨', 실행추론:'평가안됨' },
-    인지요약: '대화 중 시간·장소 인지에 어려움이 없었어요. (데모 데이터)',
-    위험신호: '없음',
-  };
+// ════════════════════════════════════════════════════════════
+//  생애 기록관 (Life Archive)
+//  통화 대화에서 어르신의 생애 정보를 자동 추출 → 누적 저장
+//  Firestore: lifeArchives(프로필) / lifeEvents(연표) / memoryTags(키워드)
+// ════════════════════════════════════════════════════════════
+let lifeArchive = null;   // { familyId, categories:{...}, updatedAt }
+let lifeEvents = [];      // 시간순 생애 사건
+let memoryTags = [];      // 자주 등장하는 키워드
+
+const LIFE_CATEGORIES = ['고향','가족관계','직업','결혼이야기','자녀이야기','손주이야기','취미','가치관','자주쓰는표현'];
+
+// 문자열 정규화 (중복 제거용)
+function normLife(s) {
+  return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
+}
+
+// 통화에서 생애 정보 추출 후 Firestore에 누적 (중복 제거)
+async function extractAndSaveLifeArchive(transcript) {
+  if (!firebaseReady || !currentUser || !currentFamilyId) return;
+  if (!transcript || transcript.length < 20) return;
+  if (!GEMINI_KEY) return; // 데모(키 없음)에서는 추출 생략
+
+  const prompt = `당신은 어르신의 생애 기록을 정리하는 전문가입니다. 아래는 AI 코코와 어르신의 실제 통화 내용입니다. 이 대화에서 어르신의 "생애 정보"를 추출하세요.
+
+[실제 대화]
+${transcript}
+
+[규칙 — 매우 중요]
+- 반드시 위 대화에 "실제로 어르신이 말한 내용"만 추출하세요. 추측·창작 금지.
+- 해당 정보가 대화에 없으면 그 항목은 빈 배열 []로 두세요.
+- 각 항목은 짧고 사실 위주의 문장으로(예: "고향은 전남 순천", "큰아들이 부산에 산다").
+- 인생의 중요한 사건(결혼, 군대, 첫 직장, 이사, 자녀 출생, 큰 행사 등)은 events에 시기와 함께.
+- tags에는 대화에서 자주/인상 깊게 나온 핵심 키워드(인물·장소·사물)를 3~6개.
+
+[출력 — 순수 JSON만. 설명/마크다운/코드블록 없이]
+{"고향":[],"가족관계":[],"직업":[],"결혼이야기":[],"자녀이야기":[],"손주이야기":[],"취미":[],"가치관":[],"자주쓰는표현":[],"events":[{"제목":"","시기":"","내용":""}],"tags":[]}`;
+
+  let data = null;
+  try {
+    const raw = await callGemini([{ role: 'user', content: prompt }], 1200);
+    let clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
+    const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
+    if (s !== -1 && e !== -1) clean = clean.slice(s, e + 1);
+    data = JSON.parse(clean);
+  } catch (err) {
+    console.error('생애 정보 파싱 실패:', err);
+    return;
+  }
+  if (!data) return;
+
+  const now = Date.now();
+
+  // 1) lifeArchives/{familyId} — 카테고리별 누적 + 중복 제거
+  const ref = fbDb.collection('lifeArchives').doc(currentFamilyId);
+  const snap = await ref.get();
+  const existing = snap.exists ? (snap.data().categories || {}) : {};
+  const merged = {};
+  LIFE_CATEGORIES.forEach(cat => {
+    const prev = Array.isArray(existing[cat]) ? existing[cat] : [];
+    const incoming = Array.isArray(data[cat]) ? data[cat] : [];
+    const seen = new Set(prev.map(normLife));
+    const add = [];
+    incoming.forEach(item => {
+      const n = normLife(item);
+      if (n && !seen.has(n)) { seen.add(n); add.push(String(item).trim()); }
+    });
+    merged[cat] = prev.concat(add);
+  });
+  await ref.set({
+    familyId: currentFamilyId,
+    seniorName: (elderProfile && elderProfile.name) || '어르신',
+    categories: merged,
+    updatedAt: now
+  }, { merge: true });
+
+  // 2) lifeEvents — 연표 사건 (제목 중복 제거)
+  if (Array.isArray(data.events)) {
+    const evSnap = await fbDb.collection('lifeEvents')
+      .where('familyId', '==', currentFamilyId).get();
+    const existingTitles = new Set(evSnap.docs.map(d => normLife(d.data().제목)));
+    for (const ev of data.events) {
+      if (!ev || !ev.제목) continue;
+      if (existingTitles.has(normLife(ev.제목))) continue;
+      existingTitles.add(normLife(ev.제목));
+      await fbDb.collection('lifeEvents').add({
+        familyId: currentFamilyId,
+        제목: String(ev.제목).trim(),
+        시기: String(ev.시기 || '').trim(),
+        내용: String(ev.내용 || '').trim(),
+        생성시각: now
+      });
+    }
+  }
+
+  // 3) memoryTags — 키워드 빈도 누적
+  if (Array.isArray(data.tags)) {
+    for (const tag of data.tags) {
+      const t = String(tag || '').trim();
+      if (!t) continue;
+      const id = currentFamilyId + '_' + normLife(t).replace(/[^\w가-힣]/g, '');
+      const tref = fbDb.collection('memoryTags').doc(id);
+      const tsnap = await tref.get();
+      const count = tsnap.exists ? (tsnap.data().count || 0) + 1 : 1;
+      await tref.set({ familyId: currentFamilyId, tag: t, count, updatedAt: now }, { merge: true });
+    }
+  }
+}
+
+// ── 생애 기록관 화면 열기/렌더 ──────────────────────────────
+async function openLifeArchive() {
+  showScreen('life-archive-screen');
+  document.getElementById('la-content').innerHTML =
+    `<div style="text-align:center; color:var(--gray); font-size:14px; padding:40px 0;">생애 기록을 불러오는 중...</div>`;
+  await loadLifeArchiveData();
+  renderLifeArchive();
+}
+
+function closeLifeArchive() {
+  showScreen('child-screen');
+  switchTab('home');
+}
+
+const LIFE_ICONS = {
+  '고향':'🏡','가족관계':'👨‍👩‍👧','직업':'💼','결혼이야기':'💍','자녀이야기':'🧒',
+  '손주이야기':'👶','취미':'🎨','가치관':'💭','자주쓰는표현':'💬'
+};
+
+function renderLifeArchive() {
+  const box = document.getElementById('la-content');
+  const cats = (lifeArchive && lifeArchive.categories) || {};
+  const hasAny = LIFE_CATEGORIES.some(c => (cats[c] || []).length > 0) || lifeEvents.length > 0 || memoryTags.length > 0;
+
+  if (!hasAny) {
+    box.innerHTML = `
+      <div class="ios-card" style="text-align:center; padding:36px 20px;">
+        <div style="font-size:40px; margin-bottom:12px;">🌱</div>
+        <div style="font-size:16px; font-weight:800; color:#16243A; margin-bottom:8px;">아직 기록이 없어요</div>
+        <div style="font-size:14px; color:var(--gray); line-height:21px;">코코와 대화를 나눌수록<br>어르신의 삶의 이야기가 차곡차곡 쌓여요.</div>
+      </div>`;
+    return;
+  }
+
+  let html = '';
+
+  // 자주 등장하는 키워드 (memoryTags)
+  if (memoryTags.length > 0) {
+    html += `<div class="section-head"><div class="section-title">기억 키워드</div></div>
+      <div class="ios-card"><div style="display:flex; flex-wrap:wrap; gap:8px;">` +
+      memoryTags.slice(0, 12).map(t =>
+        `<span style="background:var(--green-light); color:var(--green); font-size:13px; font-weight:700; padding:7px 13px; border-radius:14px;">#${escHtml(t.tag)}${t.count > 1 ? ' ' + t.count : ''}</span>`
+      ).join('') + `</div></div>`;
+  }
+
+  // 카테고리별 기록
+  const filled = LIFE_CATEGORIES.filter(c => (cats[c] || []).length > 0);
+  if (filled.length > 0) {
+    html += `<div class="section-head"><div class="section-title">삶의 기록</div></div>`;
+    filled.forEach(cat => {
+      html += `<div class="ios-card">
+        <div style="display:flex; align-items:center; gap:8px; margin-bottom:10px;">
+          <span style="font-size:18px;">${LIFE_ICONS[cat] || '•'}</span>
+          <span style="font-size:15px; font-weight:800; color:#16243A;">${cat}</span>
+        </div>
+        <div style="display:flex; flex-direction:column; gap:8px;">` +
+        (cats[cat] || []).map(item =>
+          `<div style="display:flex; gap:9px; align-items:flex-start;">
+            <div style="width:5px;height:5px;border-radius:50%;background:#9FB2D0;margin-top:8px;flex-shrink:0;"></div>
+            <div style="font-size:14px; color:#2B3A4F; line-height:21px;">${escHtml(item)}</div>
+          </div>`
+        ).join('') + `</div></div>`;
+    });
+  }
+
+  // 생애 연표 (lifeEvents, 시간순)
+  if (lifeEvents.length > 0) {
+    html += `<div class="section-head"><div class="section-title">생애 연표</div></div><div class="ios-card">`;
+    lifeEvents.forEach((ev, i) => {
+      html += `<div style="display:flex; gap:12px; ${i > 0 ? 'margin-top:14px; padding-top:14px; border-top:1px solid var(--border);' : ''}">
+        <div style="font-size:20px;">📌</div>
+        <div style="flex:1;">
+          <div style="font-size:15px; font-weight:800; color:#16243A;">${escHtml(ev.제목)}</div>
+          ${ev.시기 ? `<div style="font-size:12px; color:var(--green); font-weight:700; margin-top:2px;">${escHtml(ev.시기)}</div>` : ''}
+          ${ev.내용 ? `<div style="font-size:14px; color:#5A6473; line-height:21px; margin-top:5px;">${escHtml(ev.내용)}</div>` : ''}
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  html += `<div style="text-align:center; font-size:12px; color:#B8C0CB; padding:18px 0 4px; line-height:18px;">
+    코코와 대화할수록 더 풍부해져요.<br>"오늘의 안부가, 내일의 기억이 됩니다."</div>`;
+
+  box.innerHTML = html;
+}
+
+// 보호자 화면용 — 생애 기록 로드
+async function loadLifeArchiveData() {
+  lifeArchive = null; lifeEvents = []; memoryTags = [];
+  if (!firebaseReady || !currentFamilyId) return;
+  try {
+    const arch = await fbDb.collection('lifeArchives').doc(currentFamilyId).get();
+    lifeArchive = arch.exists ? arch.data() : null;
+
+    const ev = await fbDb.collection('lifeEvents')
+      .where('familyId', '==', currentFamilyId).get();
+    lifeEvents = ev.docs.map(d => d.data()).sort((a, b) => (a.생성시각 || 0) - (b.생성시각 || 0));
+
+    const tg = await fbDb.collection('memoryTags')
+      .where('familyId', '==', currentFamilyId).get();
+    memoryTags = tg.docs.map(d => d.data()).sort((a, b) => (b.count || 0) - (a.count || 0));
+  } catch (e) {
+    console.error('생애 기록 로드 실패:', e);
+  }
 }
 
 // ── Gemini API 호출 (여러 키 로테이션 + 자동 재시도) ──────────
