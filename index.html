@@ -599,7 +599,7 @@
         <div class="info-big">코코가 오늘<br>전화드릴 거예요</div>
         <div class="info-sub">10:00 ~ 18:00 사이 불규칙하게 전화가 와요</div>
       </div>
-      <button class="btn-big" onclick="goCallScreen()">📲  코코 전화 받기 (데모)</button>
+      <button class="btn-big" onclick="goCallScreen()">📲  코코 전화 받기</button>
     </div>
   </div>
 
@@ -973,12 +973,11 @@
 <!-- Gemini API 키 설정 모달 -->
 <div id="api-modal">
   <div class="modal-box">
-    <div class="modal-title">🔗 AI 연결 설정 (선택)</div>
-    <div class="modal-desc">Gemini API 키를 입력하면 코코가 실제 AI로 대화해요. 무료로 발급받을 수 있어요. 입력하지 않으면 예시 대화로 동작해요.</div>
-    <input class="modal-input" id="proxy-input" type="text" placeholder="API 키 붙여넣기 (선택사항)" />
+    <div class="modal-title">🔗 AI 연결 설정</div>
+    <div class="modal-desc">코코가 실제로 대화하려면 Gemini API 키가 필요해요. 무료로 발급받을 수 있어요.</div>
+    <input class="modal-input" id="proxy-input" type="text" placeholder="API 키 붙여넣기" />
     <a class="modal-link" href="https://aistudio.google.com/apikey" target="_blank">🔗 Gemini API 키 무료로 발급받기</a>
     <button class="btn-big" onclick="saveProxy()" style="margin-bottom:0;">저장하고 시작</button>
-    <div class="modal-close" onclick="skipProxy()">나중에 설정하기 (예시 대화로 진행)</div>
   </div>
 </div>
 
@@ -1018,7 +1017,7 @@ function getNextKey() {
 }
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v5.2.2';
+const APP_VERSION = 'v5.3.0';
 const APP_VERSION_DATE = '2026-06-16';
 
 let userName = '';
@@ -1030,7 +1029,6 @@ let history = [];
 let reportList = [];          // Firestore에서 로드
 let elderProfile = null;      // Firestore에서 로드한 어르신 정보 { name, age, rel, meta }
 let currentUser = null;       // 로그인된 Firebase 사용자
-let proxySkip = false;        // API 키 모달 스킵 (세션 메모리)
 // ── 가족 연결 상태 ──
 let currentFamilyId = null;   // 현재 "보고 있는" 가족 ID (여러 가족에 속해도 화면엔 하나만 표시)
 let currentFamilyCode = '';   // 가족 초대 코드 (KOKO-XXXXX)
@@ -1131,16 +1129,6 @@ const SYSTEM = `당신은 "코코"입니다. 어르신을 매일 찾아오는 AI
 - 마무리 인사 맨 끝에 반드시 [통화종료] 표시
 - 예시: "오늘 이야기 들으니 마음이 놓이네요. 약 잘 챙겨 드시고 푹 쉬세요. 내일 또 전화드릴게요! [통화종료]"
 - 어르신이 더 이야기하고 싶어 하시면 마무리하지 말고 더 들어드려요`;
-
-// 예시 대화 (AI 미연동시)
-const DEMO_RESPONSES = [
-  '안녕하세요! 오늘 날씨가 참 좋네요. 잘 지내셨어요?',
-  '그러셨군요. 오늘 점심은 맛있게 드셨어요?',
-  '다행이에요! 어제 잠은 잘 주무셨어요?',
-  '편안하게 주무셨다니 좋네요. 요즘 손주들 생각 많이 나시죠?',
-  '오늘도 건강하게 잘 보내고 계시네요. 내일 또 전화드릴게요!',
-];
-let demoIndex = 0;
 
 // ── 초기화 ──────────────────────────────────────────────────
 window.addEventListener('load', () => {
@@ -1853,7 +1841,7 @@ function goCallScreen() {
     alert('구독이 만료되어 통화를 이용할 수 없어요.\n대표 보호자가 구독을 갱신하면 다시 이용할 수 있어요.');
     return;
   }
-  if (!GEMINI_KEY && !proxySkip) {
+  if (!GEMINI_KEY) {
     document.getElementById('proxy-input').value = '';
     document.getElementById('api-modal').classList.add('show');
     return;
@@ -1864,17 +1852,8 @@ function goCallScreen() {
 
 function saveProxy() {
   const key = document.getElementById('proxy-input').value.trim();
-  if (key) {
-    if (key.length < 20) { alert('API 키를 정확히 입력해주세요'); return; }
-    GEMINI_KEY = key;
-  }
-  document.getElementById('api-modal').classList.remove('show');
-  showScreen('elder-call');
-  startCall();
-}
-
-function skipProxy() {
-  proxySkip = true;
+  if (!key || key.length < 20) { alert('API 키를 정확히 입력해주세요'); return; }
+  GEMINI_KEY = key;
   document.getElementById('api-modal').classList.remove('show');
   showScreen('elder-call');
   startCall();
@@ -2190,7 +2169,6 @@ async function startCall() {
   }
   callEnded = false;
   history = [];
-  demoIndex = 0;
   turnCount = 0;
   callStartTime = Date.now();
   kokoSpeaking = false;
@@ -2219,6 +2197,7 @@ async function startCall() {
       reply = '안녕하세요! 코코예요. 오늘 하루 어떻게 보내셨어요?';
     }
   } else {
+    // goCallScreen()이 API 키 없이는 통화 진입을 막으므로 이 분기는 정상 흐름에서 도달하지 않음
     reply = '안녕하세요! 코코예요. 오늘 하루 어떻게 보내셨어요?';
   }
 
@@ -2298,9 +2277,12 @@ async function onElderSpeech(text) {
       reply = '죄송해요, 잘 못 들었어요. 다시 한번 말씀해주시겠어요?';
     }
   } else {
-    history.push({ role: 'user', content: text });
-    reply = DEMO_RESPONSES[demoIndex % DEMO_RESPONSES.length];
-    demoIndex++;
+    // 이 시점엔 API 키가 항상 있어야 정상(goCallScreen에서 미리 막음).
+    // 혹시라도 키가 비어버린 비상 상황이면, 가짜 대화로 흉내내지 않고 통화를 정직하게 끝냄.
+    console.error('GEMINI_KEY가 없는 상태로 통화가 진행됨');
+    addTranscript('koko', '죄송해요, 지금 코코와 연결이 끊겼어요. 잠시 후 다시 전화해주세요.');
+    endCall();
+    return;
   }
 
   // 코코가 통화 종료 신호를 보냈는지 확인
@@ -2481,18 +2463,28 @@ ${transcript}
     }
 
     if (!report) {
-      // API는 됐지만 파싱 계속 실패 → 대화 내용이라도 보여주는 최소 브리핑
+      // API는 됐지만 파싱 계속 실패 → 대화 내용이라도 보여주는 최소 브리핑 (중복 발화는 한 번만)
+      const uniqueUtterances = [...new Set(
+        history.filter(m => m.role === 'user' && !m.content.startsWith('(')).map(m => m.content)
+      )];
       report = {
         상태: '확인필요',
         감정: '보통',
         요약: '브리핑 자동 분석에 실패했어요. 아래 대화 내용을 직접 확인해주세요.',
-        주요내용: history.filter(m => m.role === 'user' && !m.content.startsWith('(')).slice(0, 3).map(m => m.content),
+        주요내용: uniqueUtterances.slice(0, 3),
         위험신호: '없음',
       };
     }
   } else {
-    await new Promise(r => setTimeout(r, 1200));
-    report = makeDemoReport(transcript);
+    // goCallScreen()이 API 키 없이는 통화 진입을 막으므로 정상 흐름에서는 도달하지 않음.
+    // 혹시 도달해도 가짜 브리핑을 만들지 않고 있는 그대로의 대화만 기록함.
+    report = {
+      상태: '확인필요',
+      감정: '보통',
+      요약: 'AI 연결 없이 진행된 통화예요. 아래 대화 내용을 직접 확인해주세요.',
+      주요내용: [],
+      위험신호: '없음',
+    };
   }
 
   // 날짜·시간·이름·원본대화 추가
@@ -2852,52 +2844,11 @@ function switchTab(tab) {
 const MOOD_EMOJI = { '밝음':'😊','보통':'🙂','우울':'🥺','불안':'😟' };
 
 function renderChildReports() {
-  seedDemoReportsIfEmpty();
   renderHomeTab();
   renderLogsTab();
   renderAnalysisTab();
   renderSettingsTab();
   refreshSubGate();
-}
-
-// 자녀가 처음 들어왔는데 리포트가 없으면 시연용 데모 데이터를 채움
-function seedDemoReportsIfEmpty() {
-  if (reportList.length > 0) return;
-  reportList = [
-    {
-      날짜:'2026-06-08', 시간:'14:20', 이름:'조남웅', 상태:'주의', 감정:'우울',
-      요약:'오늘 점심을 절반만 드셨고 다리가 무겁다고 하셨어요. 어제 잠을 설치셨다고 합니다. 며칠 전 이야기한 손주 이름을 잠시 떠올리지 못하셨습니다.',
-      주요내용:['점심 절반만 드심','수면 부족 호소','단어 회상 지연 1회 감지'],
-      인지평가:{ 시간인지:'정상', 장소인지:'정상', 단기기억:'주의', 계산:'정상', 실행추론:'평가안됨' },
-      인지요약:'단기기억에서 손주 이름을 떠올리는 데 평소보다 시간이 걸렸어요.',
-      위험신호:'익숙한 손주 이름을 떠올리는 데 평소보다 시간이 걸렸습니다.',
-      대화내용:'코코: 할머니, 오늘 점심은 뭐 드셨어요?\n어르신: 입맛이 없어서 반만 먹었어\n코코: 아이고, 어디 불편하신 데 있으세요?\n어르신: 다리가 좀 무겁네. 어제 잠을 설쳤어',
-    },
-    {
-      날짜:'2026-06-07', 시간:'10:05', 이름:'조남웅', 상태:'안정', 감정:'밝음',
-      요약:'기분이 아주 좋으셨어요. 아침 산책을 다녀오셨고 친구분과 화투를 치셨다고 즐겁게 이야기하셨습니다.',
-      주요내용:['아침 산책 다녀옴','친구분과 화투','기분 매우 좋음'],
-      인지평가:{ 시간인지:'정상', 장소인지:'정상', 단기기억:'정상', 계산:'정상', 실행추론:'정상' },
-      인지요약:'대화 중 시간·장소 인지에 어려움이 없었어요.',
-      위험신호:'없음',
-    },
-    {
-      날짜:'2026-06-06', 시간:'16:40', 이름:'조남웅', 상태:'안정', 감정:'우울',
-      요약:'조금 외로워하셨어요. 자녀분들이 보고 싶다고 하셨습니다. 건강 상태는 특별한 이상 없었습니다.',
-      주요내용:['자녀 그리워함','건강 이상 없음','정서 지지 필요'],
-      인지평가:{ 시간인지:'정상', 장소인지:'정상', 단기기억:'평가안됨', 계산:'평가안됨', 실행추론:'평가안됨' },
-      인지요약:'특이한 인지 변화는 관찰되지 않았어요.',
-      위험신호:'없음',
-    },
-    {
-      날짜:'2026-06-05', 시간:'11:30', 이름:'조남웅', 상태:'안정', 감정:'보통',
-      요약:'차분하고 안정적인 하루였어요. 식사와 약 복용 모두 잘 하셨습니다.',
-      주요내용:['식사 잘 하심','약 복용 완료','컨디션 양호'],
-      인지평가:{ 시간인지:'정상', 장소인지:'정상', 단기기억:'정상', 계산:'정상', 실행추론:'평가안됨' },
-      인지요약:'전반적으로 안정적인 인지 상태를 보였어요.',
-      위험신호:'없음',
-    },
-  ];
 }
 
 const MOOD_EMOJI2 = {};
@@ -2912,9 +2863,8 @@ function getElderProfile() {
       rel: elderProfile.rel || ''
     };
   }
-  // 등록 정보 없으면 최근 리포트 이름 또는 데모값
-  const name = (reportList[0] && reportList[0].이름) || '조남웅';
-  return { name, initial: name.charAt(0), meta: '78세 · ○○요양원 201', rel: '아빠' };
+  // 등록 정보가 아직 없는 경우 (정상적으로는 거의 발생하지 않음 — 어르신 등록 전이면 화면 자체가 다름)
+  return { name: '어르신', initial: '어', meta: '아직 등록되지 않았어요', rel: '' };
 }
 
 // ── 탭 1: 홈 ──
@@ -3127,7 +3077,11 @@ function renderAnalysisTab() {
         risks.push({ title: '단어 찾기 어려움', desc: '익숙한 단어를 떠올리는 데 평소보다 시간이 걸렸습니다.' });
     }
   });
-  if (risks.length === 0) risks.push({ title: '특이 신호 없음', desc: '최근 통화에서 주의할 만한 변화가 감지되지 않았어요.' });
+  if (risks.length === 0) {
+    risks.push(reportList.length > 0
+      ? { title: '특이 신호 없음', desc: '최근 통화에서 주의할 만한 변화가 감지되지 않았어요.' }
+      : { title: '아직 분석할 데이터가 없어요', desc: '통화가 누적되면 위험 신호를 분석해서 보여드려요.' });
+  }
 
   document.getElementById('analysis-risks').innerHTML = risks.slice(0, 4).map(rk => `
     <div class="risk-card">
@@ -3135,19 +3089,20 @@ function renderAnalysisTab() {
       <div><div class="risk-title">${escHtml(rk.title)}</div><div class="risk-desc">${escHtml(rk.desc)}</div></div>
     </div>`).join('');
 
-  // 인지 지표 (리포트 인지평가 → 점수화)
+  // 인지 지표 (리포트 인지평가 → 점수화, 데이터 없으면 가짜 숫자 대신 '-' 표시)
   const scores = computeCogScores();
-  document.getElementById('cog-total').textContent = scores.total + '점';
+  document.getElementById('cog-total').textContent = scores.hasData ? scores.total + '점' : '-';
   const metrics = [
     { name: '언어 유창성', val: scores.언어 },
     { name: '기억력', val: scores.기억 },
     { name: '반응 속도', val: scores.반응 },
   ];
   document.getElementById('cog-metrics').innerHTML = metrics.map(m => {
-    const color = m.val >= 75 ? '#3BA776' : (m.val >= 60 ? '#E5A33D' : '#D9534F');
+    const hasVal = m.val != null;
+    const color = !hasVal ? '#C0C8D2' : (m.val >= 75 ? '#3BA776' : (m.val >= 60 ? '#E5A33D' : '#D9534F'));
     return `<div class="metric">
-      <div class="metric-row"><div class="metric-name">${m.name}</div><div class="metric-val" style="color:${color}">${m.val}점</div></div>
-      <div class="metric-bar"><div class="metric-fill" style="width:${m.val}%;background:${color}"></div></div>
+      <div class="metric-row"><div class="metric-name">${m.name}</div><div class="metric-val" style="color:${color}">${hasVal ? m.val + '점' : '측정 전'}</div></div>
+      <div class="metric-bar"><div class="metric-fill" style="width:${hasVal ? m.val : 0}%;background:${color}"></div></div>
     </div>`;
   }).join('');
   document.getElementById('cog-note').textContent = scores.note;
@@ -3160,7 +3115,7 @@ function renderAnalysisTab() {
   renderWeekChart('duration-chart', getWeekDurations(), '#F5A081', '분');
 }
 
-// 인지 점수 계산 (리포트 인지평가 기반, 없으면 데모값)
+// 인지 점수 계산 (리포트 인지평가 기반 — 통화 기록이 없으면 점수를 만들어내지 않음)
 function computeCogScores() {
   const valMap = { '정상': 90, '주의': 65, '확인필요': 45, '평가안됨': null };
   let memScores = [], total = [];
@@ -3170,23 +3125,26 @@ function computeCogScores() {
     if (valMap[cog.단기기억] != null) memScores.push(valMap[cog.단기기억]);
   });
   const avg = a => a.length ? Math.round(a.reduce((x,y)=>x+y,0)/a.length) : null;
-  const 기억 = avg(memScores) ?? 68;
-  const 언어 = avg(total) ?? 72;
-  const 반응 = 75;
-  const totalScore = Math.round((기억 + 언어 + 반응) / 3);
-  let note = '최근 통화 기준 인지 지표예요.';
-  if (기억 < 70) note = '기억력 지표가 다소 낮아요. 단어 회상 지연이 반복되면 전문의 상담을 권장합니다.';
-  return { total: totalScore, 언어, 기억, 반응, note };
+  const 기억 = avg(memScores);
+  const 언어 = avg(total);
+  // 반응 속도는 아직 실제로 측정하는 로직이 없어 항목 자체를 비워둠(가짜 숫자를 보여주지 않기 위함)
+  const 반응 = null;
+  const validScores = [기억, 언어].filter(v => v != null);
+  const hasData = validScores.length > 0;
+  const totalScore = hasData ? Math.round(validScores.reduce((x,y)=>x+y,0)/validScores.length) : null;
+  let note = hasData ? '최근 통화 기준 인지 지표예요.' : '아직 통화 기록이 없어 인지 지표를 계산할 수 없어요. 통화가 누적되면 여기 표시돼요.';
+  if (hasData && 기억 != null && 기억 < 70) note = '기억력 지표가 다소 낮아요. 단어 회상 지연이 반복되면 전문의 상담을 권장합니다.';
+  return { total: totalScore, 언어, 기억, 반응, note, hasData };
 }
 
-// 주간 기분 (최근 7개 리포트 → 점수, 부족하면 데모)
+// 주간 기분 (최근 7개 리포트 → 점수, 데이터 없는 날은 null로 비워둠)
 function getWeekMoods() {
   const moodVal = { '밝음': 82, '보통': 68, '우울': 50, '불안': 55 };
   const days = ['월','화','수','목','금','토','일'];
   const recent = reportList.slice(0, 7).reverse();
   return days.map((d, i) => ({
     label: d,
-    val: recent[i] ? (moodVal[recent[i].감정] || 65) : [82,78,80,70,65,60,58][i],
+    val: recent[i] ? (moodVal[recent[i].감정] || 65) : null,
   }));
 }
 function getWeekDurations() {
@@ -3194,21 +3152,24 @@ function getWeekDurations() {
   const recent = reportList.slice(0, 7).reverse();
   return days.map((d, i) => ({
     label: d,
-    val: recent[i] && recent[i].대화내용 ? Math.max(3, Math.round(recent[i].대화내용.length/120)) : [8,6,9,5,4,7,3][i],
+    val: (recent[i] && recent[i].대화내용) ? Math.max(3, Math.round(recent[i].대화내용.length/120)) : null,
   }));
 }
 
-// 막대 차트 렌더링
+// 막대 차트 렌더링 (데이터 없는 날은 빈 막대로 표시)
 function renderWeekChart(id, data, color, unit) {
-  const max = Math.max(...data.map(d => d.val), 1);
+  const validVals = data.map(d => d.val).filter(v => v != null);
+  const hasAny = validVals.length > 0;
+  const max = Math.max(...validVals, 1);
   document.getElementById(id).innerHTML = data.map(d => {
-    const h = Math.max(12, (d.val / max) * 110);
+    const has = d.val != null;
+    const h = has ? Math.max(12, (d.val / max) * 110) : 4;
     return `<div class="chart-col">
-      <div class="chart-val">${d.val}${unit}</div>
-      <div class="chart-bar" style="height:${h}px;background:${color}"></div>
+      <div class="chart-val">${has ? d.val + unit : '-'}</div>
+      <div class="chart-bar" style="height:${h}px;background:${has ? color : '#E4E8EE'}"></div>
       <div class="chart-label">${d.label}</div>
     </div>`;
-  }).join('');
+  }).join('') + (hasAny ? '' : `<div style="width:100%;text-align:center;color:var(--gray);font-size:13px;padding-top:8px;">아직 데이터가 없어요. 통화가 쌓이면 표시돼요.</div>`);
 }
 
 // ── 탭 4: 설정 ──
