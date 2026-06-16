@@ -695,6 +695,8 @@
           </div>
         </div>
 
+        <div id="family-switcher" style="display:none; overflow-x:auto; white-space:nowrap; margin-bottom:14px; padding-bottom:2px;"></div>
+
         <div class="ios-card" id="home-profile-card">
           <div class="elder-profile">
             <div class="elder-initial" id="home-elder-initial">어</div>
@@ -805,14 +807,14 @@
         </div>
 
         <div class="section-head"><div class="section-title">돌봄 대상</div></div>
-        <div class="ios-card" onclick="editElderInfo()" style="cursor:pointer;">
+        <div class="ios-card" id="elder-info-card" onclick="editElderInfo()" style="cursor:pointer;">
           <div class="elder-profile">
             <div class="elder-initial" id="set-elder-initial">어</div>
             <div class="elder-info">
               <div class="elder-name-lg" id="set-elder-name">어르신</div>
               <div class="elder-meta" id="set-elder-meta">돌봄 대상</div>
             </div>
-            <div style="color:#C0C8D2; font-size:20px;">›</div>
+            <div style="color:#C0C8D2; font-size:20px;" id="elder-info-arrow">›</div>
           </div>
         </div>
 
@@ -1011,10 +1013,11 @@ let elderProfile = null;      // Firestore에서 로드한 어르신 정보 { na
 let currentUser = null;       // 로그인된 Firebase 사용자
 let proxySkip = false;        // API 키 모달 스킵 (세션 메모리)
 // ── 가족 연결 상태 ──
-let currentFamilyId = null;   // 현재 사용자가 속한 가족 ID
+let currentFamilyId = null;   // 현재 "보고 있는" 가족 ID (여러 가족에 속해도 화면엔 하나만 표시)
 let currentFamilyCode = '';   // 가족 초대 코드 (KOKO-XXXXX)
-let currentMemberRole = '';   // 'owner' | 'member'
+let currentMemberRole = '';   // 현재 보고 있는 가족에서의 내 역할 'owner' | 'member'
 let familyMembers = [];       // 가족 구성원 목록
+let myFamilies = [];          // 내가 속한 모든 가족 목록 [{ familyId, role, elderName, elderInitial }, ...] (탭 전환용)
 // ── 구독 상태 (가족 단위) ──
 let currentSubscription = null; // { plan, status, startedAt, expiresAt, paidByUid, paymentProvider }
 const PLAN_INFO = {
@@ -1240,17 +1243,50 @@ async function genUniqueFamilyCode() {
 async function loadUserContext() {
   if (!currentUser) return;
   currentFamilyId = null; currentFamilyCode = ''; currentMemberRole = '';
-  elderProfile = null; reportList = []; familyMembers = [];
+  elderProfile = null; reportList = []; familyMembers = []; myFamilies = [];
   try {
-    const userSnap = await fbDb.collection('users').doc(currentUser.uid).get();
-    const famId = userSnap.exists ? userSnap.data().familyId : null;
-    if (famId) {
-      currentFamilyId = famId;
-      await loadFamilyData(famId);
+    // 내가 속한 모든 가족(familyMembers 문서) 조회 — 한 사람이 여러 가족에 속할 수 있음
+    const myMemberDocs = await fbDb.collection('familyMembers')
+      .where('uid', '==', currentUser.uid).get();
+    const myFamilyIds = myMemberDocs.docs.map(d => d.data().familyId);
+
+    if (myFamilyIds.length > 0) {
+      // 각 가족의 어르신 이름을 가져와 전환 목록(myFamilies)을 구성
+      const seniorSnaps = await Promise.all(
+        myFamilyIds.map(fid => fbDb.collection('seniors').doc(fid).get())
+      );
+      myFamilies = myMemberDocs.docs.map((d, i) => {
+        const seniorData = seniorSnaps[i].exists ? seniorSnaps[i].data() : null;
+        const name = seniorData ? seniorData.name : '어르신';
+        return {
+          familyId: d.data().familyId,
+          role: d.data().role || 'member',
+          elderName: name,
+          elderInitial: (name || '어').charAt(0),
+        };
+      });
+
+      // 마지막으로 보던 가족(users.familyId)이 내가 속한 가족 목록에 여전히 있으면 그걸 우선 선택
+      const userSnap = await fbDb.collection('users').doc(currentUser.uid).get();
+      const lastFamId = userSnap.exists ? userSnap.data().familyId : null;
+      const fallback = myFamilies.some(f => f.familyId === lastFamId) ? lastFamId : myFamilies[0].familyId;
+
+      currentFamilyId = fallback;
+      await loadFamilyData(currentFamilyId);
     }
   } catch (e) {
     console.error('컨텍스트 로드 실패:', e);
   }
+}
+
+// 가족 전환: 자녀 화면에서 다른 어르신(가족)으로 화면을 바꿀 때 호출
+async function switchFamily(familyId) {
+  if (familyId === currentFamilyId) return;
+  if (!myFamilies.some(f => f.familyId === familyId)) return; // 내가 속하지 않은 가족은 차단
+  currentFamilyId = familyId;
+  try { await fbDb.collection('users').doc(currentUser.uid).set({ familyId }, { merge: true }); } catch (e) {}
+  await loadFamilyData(familyId);
+  renderChildReports();
 }
 
 // ── Firestore: 가족 데이터 로드 (familyId 기준 공유) ────────
@@ -1289,9 +1325,6 @@ async function loadFamilyData(familyId) {
 
 // ── 가족 만들기 (어르신 등록과 함께) ────────────────────────
 async function createFamilyWithElder(elderData) {
-  // 이 사용자가 이전에 다른 가족에 속해 있었다면, 유령 멤버십이 남지 않도록 먼저 정리
-  await leaveOldFamilyIfAny();
-
   const familyId = fbDb.collection('families').doc().id; // 새 ID
   const code = await genUniqueFamilyCode();
   const batch = fbDb.batch();
@@ -1329,34 +1362,7 @@ async function createFamilyWithElder(elderData) {
 
   await batch.commit();
   currentFamilyId = familyId;
-  await loadFamilyData(familyId);
-}
-
-// 가족 코드로 참여 ────────────────────────────────────────
-// 사용자가 이전에 다른 가족에 속해 있었다면 그 멤버십 문서를 정리한다.
-// (한 사용자가 동시에 여러 가족의 familyMembers로 남아있으면 구독/멤버 목록이 꼬이는 문제 방지)
-async function leaveOldFamilyIfAny() {
-  if (!currentUser) return;
-  try {
-    const userSnap = await fbDb.collection('users').doc(currentUser.uid).get();
-    const oldFamilyId = userSnap.exists ? userSnap.data().familyId : null;
-    if (!oldFamilyId) return;
-
-    const oldMemberRef = fbDb.collection('familyMembers').doc(oldFamilyId + '_' + currentUser.uid);
-    const oldMemberSnap = await oldMemberRef.get();
-    if (!oldMemberSnap.exists) return;
-
-    if (oldMemberSnap.data().role === 'owner') {
-      // owner가 가족을 떠나면 나머지 가족 전체가 고립되니, 여기서는 막고 알려준다.
-      // (가족 양도/삭제는 별도 플로우로 다뤄야 하는 더 민감한 동작이라 여기서 자동 처리하지 않음)
-      throw new Error('이미 대표 보호자로 등록된 가족이 있어요. 새 가족을 만들기 전에 기존 가족을 정리해주세요.');
-    }
-    await oldMemberRef.delete();
-  } catch (e) {
-    if (e && e.message && e.message.includes('대표 보호자')) throw e;
-    console.error('이전 가족 정리 실패:', e);
-    // 정리에 실패해도 새 가족 생성 자체를 막지는 않음(네트워크 일시 오류 등)
-  }
+  await loadUserContext(); // myFamilies 목록도 함께 갱신
 }
 
 // ── 가족 코드로 참여 ────────────────────────────────────────
@@ -1368,8 +1374,12 @@ async function joinFamilyByCode(code) {
   if (q.empty) throw new Error('해당 코드의 가족을 찾을 수 없어요.');
   const familyId = q.docs[0].id;
 
-  // 이 사용자가 이전에 다른 가족에 속해 있었다면, 유령 멤버십이 남지 않도록 먼저 정리
-  await leaveOldFamilyIfAny();
+  // 이미 이 가족에 속해 있다면 중복 가입 방지
+  if (myFamilies.some(f => f.familyId === familyId)) {
+    currentFamilyId = familyId;
+    await loadFamilyData(familyId);
+    return;
+  }
 
   const myName = (await fbDb.collection('users').doc(currentUser.uid).get()).data().name || '보호자';
   const batch = fbDb.batch();
@@ -1381,7 +1391,7 @@ async function joinFamilyByCode(code) {
   await batch.commit();
 
   currentFamilyId = familyId;
-  await loadFamilyData(familyId);
+  await loadUserContext(); // myFamilies 목록도 함께 갱신
 }
 
 // ── 구독 관리 (owner 전용) ──────────────────────────────────
@@ -1686,6 +1696,10 @@ function cancelElderSetup() {
 
 // 설정에서 돌봄 대상 정보 수정 (등록 화면 재사용, 기존 값 채우기)
 function editElderInfo() {
+  if (!isOwner()) {
+    alert('돌봄 대상 정보 수정은 대표 보호자만 할 수 있어요.');
+    return;
+  }
   isCreatingNewFamily = false;   // 기존 정보 수정이지 새 가족 생성이 아님
   const e = elderProfile;
   if (e) {
@@ -2829,7 +2843,38 @@ function getElderProfile() {
 }
 
 // ── 탭 1: 홈 ──
+// 자녀가 여러 어르신(가족)에 속해 있을 때, 가로 스크롤로 전환할 수 있는 칩 목록
+function renderFamilySwitcher() {
+  const wrap = document.getElementById('family-switcher');
+  if (!wrap) return;
+
+  // 1개뿐이면(가장 흔한 경우) 굳이 안 보여줌
+  if (!myFamilies || myFamilies.length <= 1) {
+    wrap.style.display = 'none';
+    wrap.innerHTML = '';
+    return;
+  }
+
+  wrap.style.display = 'block';
+  wrap.innerHTML = myFamilies.map(f => {
+    const active = f.familyId === currentFamilyId;
+    return `<div onclick="switchFamily('${f.familyId}')" style="
+      display:inline-flex; align-items:center; gap:6px;
+      padding:8px 14px; margin-right:8px; border-radius:20px;
+      font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;
+      background:${active ? '#16243A' : '#F0F2F5'};
+      color:${active ? '#fff' : '#5B6470'};
+    ">${escHtml(f.elderInitial)} ${escHtml(f.elderName)}${f.role === 'owner' ? '' : ' · 구성원'}</div>`;
+  }).join('') + `<div onclick="goCreateFamily()" style="
+    display:inline-flex; align-items:center; gap:4px;
+    padding:8px 14px; border-radius:20px;
+    font-size:14px; font-weight:700; cursor:pointer; white-space:nowrap;
+    background:#fff; border:1.5px dashed #C0C8D2; color:#8A93A0;
+  ">+ 새 어르신</div>`;
+}
+
 function renderHomeTab() {
+  renderFamilySwitcher();
   const prof = getElderProfile();
   document.getElementById('home-elder-initial').textContent = prof.initial;
   document.getElementById('home-elder-name').textContent = prof.name;
@@ -3125,6 +3170,16 @@ function renderSettingsTab() {
   }
   const inviteCard = document.getElementById('invite-card-wrap');
   if (inviteCard) inviteCard.style.opacity = owner ? '1' : '0.55';
+
+  // 돌봄 대상(어르신) 정보 카드 — 일반 구성원은 보기만 가능, 수정은 대표 보호자만
+  const elderCard = document.getElementById('elder-info-card');
+  const elderArrow = document.getElementById('elder-info-arrow');
+  if (elderCard) {
+    elderCard.style.cursor = owner ? 'pointer' : 'default';
+  }
+  if (elderArrow) {
+    elderArrow.textContent = owner ? '›' : '';
+  }
 }
 
 // 구독 카드 렌더링 (owner/member 구분)
