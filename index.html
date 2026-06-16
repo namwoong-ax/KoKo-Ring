@@ -428,7 +428,7 @@
       <span id="auth-toggle-text">계정이 없으신가요?</span>
       <span onclick="toggleAuthMode()" style="color:var(--green); font-weight:700; cursor:pointer; margin-left:4px;" id="auth-toggle-link">회원가입</span>
     </div>
-    <div style="font-size:11px; color:#ccc; margin-top:10px;">v5.0 · 가족 연결</div>
+    <div style="font-size:11px; color:#ccc; margin-top:10px;" id="app-version-text">v5.0 · 가족 연결</div>
   </div>
 
   <!-- ① 역할 선택 (로그인 후) -->
@@ -453,6 +453,7 @@
 
     <button class="btn-big" id="start-btn" onclick="startApp()" disabled>시작하기</button>
     <div onclick="logout()" style="font-size:13px; color:var(--gray); margin-top:14px; cursor:pointer;">⇄ 다른 계정으로 로그인</div>
+    <div style="font-size:11px; color:#ccc; margin-top:14px;" id="app-version-text-2">v5.0</div>
   </div>
 
   <!-- ①-B 어르신 미등록 안내 (자녀가 아직 어르신 정보를 등록하지 않은 상태) -->
@@ -876,7 +877,7 @@
         </div>
 
         <button class="btn-outline" onclick="logout()" style="margin-top:6px;">로그아웃</button>
-        <div class="app-version">코코링 v1.0.0 · 데모 버전</div>
+        <div class="app-version" id="app-version-text-3">코코링 v1.0.0</div>
       </div>
     </div>
 
@@ -1002,6 +1003,10 @@ function getNextKey() {
   return key;
 }
 
+// ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
+const APP_VERSION = 'v5.1.0';
+const APP_VERSION_DATE = '2026-06-16';
+
 let userName = '';
 let userRole = '';            // 'elder' | 'child' (세션 중에만 유지)
 let isCreatingNewFamily = false; // elder-setup 화면이 "새 가족 생성" 의도로 열렸는지 표시
@@ -1126,6 +1131,7 @@ let demoIndex = 0;
 // ── 초기화 ──────────────────────────────────────────────────
 window.addEventListener('load', () => {
   setupSpeechRecognition();
+  renderAppVersion();
 
   if (!firebaseReady) {
     // Firebase 설정이 안 됐을 때 안내
@@ -1770,6 +1776,17 @@ function logout() {
   } else {
     showScreen('auth-screen');
   }
+}
+
+// 화면 곳곳의 버전 표시를 한 번에 채움 (APP_VERSION 상수만 바꾸면 전체 반영됨)
+function renderAppVersion() {
+  const text = `${APP_VERSION} · ${APP_VERSION_DATE} 업데이트`;
+  const v1 = document.getElementById('app-version-text');
+  const v2 = document.getElementById('app-version-text-2');
+  const v3 = document.getElementById('app-version-text-3');
+  if (v1) v1.textContent = text;
+  if (v2) v2.textContent = APP_VERSION;
+  if (v3) v3.textContent = `코코링 ${text}`;
 }
 
 function showScreen(id) {
