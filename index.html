@@ -11,6 +11,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-storage-compat.js"></script>
 <script>
   // ════════════════════════════════════════════════════════════
   //  ⬇️⬇️⬇️  여기에 Firebase 설정을 붙여넣으세요!  ⬇️⬇️⬇️
@@ -28,12 +29,13 @@
   // ════════════════════════════════════════════════════════════
 
   // Firebase 초기화
-  let fbAuth = null, fbDb = null, firebaseReady = false;
+  let fbAuth = null, fbDb = null, fbStorage = null, firebaseReady = false;
   try {
     if (firebaseConfig.apiKey && !firebaseConfig.apiKey.includes('여기에')) {
       firebase.initializeApp(firebaseConfig);
       fbAuth = firebase.auth();
       fbDb = firebase.firestore();
+      fbStorage = firebase.storage();
       // 브라우저 로컬 스토리지로 로그인 상태 영구 유지
       fbAuth.setPersistence(firebase.auth.Auth.Persistence.LOCAL);
       firebaseReady = true;
@@ -396,6 +398,10 @@
   #api-modal.show { display: flex; }
   #other-family-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
   #other-family-modal.show { display: flex; }
+  #facility-code-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
+  #facility-code-modal.show { display: flex; }
+  #facility-consent-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
+  #facility-consent-modal.show { display: flex; }
   .modal-box { background: white; border-radius: 20px; padding: 24px; width: 100%; max-width: 360px; }
   .modal-title { font-size: 16px; font-weight: 700; margin-bottom: 8px; }
   .modal-desc { font-size: 13px; color: var(--gray); line-height: 20px; margin-bottom: 16px; }
@@ -864,6 +870,11 @@
         </div>
         <div style="font-size:12px; color:var(--gray); margin:-6px 4px 14px; line-height:18px;" id="invite-link-text"></div>
 
+        <div class="section-head"><div class="section-title">요양 시설 연결</div></div>
+        <div class="ios-card" id="facility-link-card">
+          <div class="fam-row"><div class="fam-name">불러오는 중...</div></div>
+        </div>
+
         <div class="section-head"><div class="section-title">통화 설정</div></div>
         <div class="ios-card">
           <div class="setting-row">
@@ -1014,6 +1025,31 @@
   </div>
 </div>
 
+<!-- 요양 시설 연결 코드 입력 -->
+<div id="facility-code-modal">
+  <div class="modal-box">
+    <div class="modal-title">요양 시설 연결</div>
+    <div class="modal-desc">어르신이 계신 요양 시설로부터 받으신 연결 코드를 입력해주세요. 코드를 입력해도 바로 연결되지 않고, 다음 화면에서 직접 동의해야 연결이 완료돼요.</div>
+    <input class="modal-input" id="facility-link-code" type="text" placeholder="예) 7X9KQ2" style="text-transform:uppercase; letter-spacing:1px; font-weight:700;" />
+    <div id="facility-code-error" style="color:#D9534F; font-size:13px; margin:-4px 0 10px;display:none;"></div>
+    <button class="btn-big" id="facility-code-btn" onclick="lookupFacilityCode()" style="margin-bottom:0;">코드 확인하기</button>
+    <div class="modal-close" onclick="closeFacilityCodeModal()">취소</div>
+  </div>
+</div>
+
+<!-- 요양 시설 연결 동의 확인 -->
+<div id="facility-consent-modal">
+  <div class="modal-box">
+    <div class="modal-title">연결 요청 확인</div>
+    <div class="modal-desc" id="facility-consent-desc">불러오는 중...</div>
+    <div style="background:var(--bg); border-radius:12px; padding:14px; margin-bottom:16px; font-size:13px; line-height:1.6; color:#5B6470;">
+      동의하면 이 시설의 직원이 어르신의 통화 요약, 감정 상태, 위험 신호를 확인할 수 있어요. 언제든 가족 설정에서 연결을 끊을 수 있어요.
+    </div>
+    <button class="btn-big" onclick="confirmFacilityLink(true)" style="margin-bottom:8px;">동의하고 연결하기</button>
+    <div class="modal-close" onclick="confirmFacilityLink(false)">거절하기</div>
+  </div>
+</div>
+
 <script>
 // ── 전역 상태 ───────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════
@@ -1038,8 +1074,8 @@ function getNextKey() {
 }
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v5.5.0';
-const APP_VERSION_DATE = '2026-06-17';
+const APP_VERSION = 'v6.2.0';
+const APP_VERSION_DATE = '2026-06-18';
 
 let userName = '';
 let userRole = '';            // 'elder' | 'child' (세션 중에만 유지)
@@ -1258,15 +1294,28 @@ function genFamilyCode() {
 }
 
 // 중복 없는 가족 코드 생성: Firestore에서 실제로 안 쓰이는 코드가 나올 때까지 재시도
-async function genUniqueFamilyCode() {
+// 가족 코드를 만들고, familyCodes/{code} 문서를 "예약"해서 고유성을 보장함.
+// 기존 방식(코드 생성 → 중복 확인 쿼리 → 나중에 batch.commit으로 가족 문서 생성)은
+// "확인"과 "실제 생성" 사이에 시간차가 있어, 이론적으로 두 사람이 거의 동시에
+// 같은 코드를 뽑으면 둘 다 중복 없음으로 통과해버릴 수 있었음(TOCTOU 레이스 컨디션).
+// Firestore는 같은 문서 ID로 동시에 create()를 시도하면 반드시 하나만 성공하는
+// 것을 보장하므로, familyCodes/{code} 문서를 "선점"하는 방식으로 완전히 막음.
+async function reserveUniqueFamilyCode(familyId) {
   for (let attempt = 0; attempt < 8; attempt++) {
     const code = genFamilyCode();
-    const dup = await fbDb.collection('families').where('familyCode', '==', code).limit(1).get();
-    if (dup.empty) return code;
-    console.warn('가족 코드 충돌, 재생성 시도:', attempt + 1);
+    const ref = fbDb.collection('familyCodes').doc(code);
+    try {
+      // create()는 문서가 이미 있으면 실패함 — 이 원자적 동작이 레이스 컨디션을 막아줌
+      await ref.create({ familyId, reservedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      return code;
+    } catch (e) {
+      console.warn('가족 코드 충돌(동시 생성 시도 포함), 재시도:', attempt + 1);
+    }
   }
   // 8번 연속 충돌은 거의 불가능하지만, 안전하게 타임스탬프를 섞어 마지막 시도
-  return genFamilyCode() + Date.now().toString(36).slice(-3).toUpperCase();
+  const fallbackCode = genFamilyCode() + Date.now().toString(36).slice(-3).toUpperCase();
+  await fbDb.collection('familyCodes').doc(fallbackCode).set({ familyId, reservedAt: firebase.firestore.FieldValue.serverTimestamp() });
+  return fallbackCode;
 }
 
 // ── 사용자 컨텍스트 로드 (소속 가족 확인) ───────────────────
@@ -1356,7 +1405,7 @@ async function loadFamilyData(familyId) {
 // ── 가족 만들기 (어르신 등록과 함께) ────────────────────────
 async function createFamilyWithElder(elderData) {
   const familyId = fbDb.collection('families').doc().id; // 새 ID
-  const code = await genUniqueFamilyCode();
+  const code = await reserveUniqueFamilyCode(familyId);
   const batch = fbDb.batch();
 
   // 1) families
@@ -1431,13 +1480,30 @@ async function subscribePlan(plan, provider) {
   const info = PLAN_INFO[plan];
   if (!info) return;
 
-  // ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
   // 🔌 향후 결제 연동 지점 (PaymentGateway)
-  //   provider별로 결제창 호출 → 성공 콜백에서 아래 구독 갱신 실행
+  //
+  // ⚠️ 보안 경고 — 실제 결제로 바꿀 때 반드시 읽어주세요 ⚠️
+  // 지금 이 함수는 "결제가 성공했다"는 판단과 "구독을 활성화한다"는
+  // Firestore 쓰기를 모두 브라우저(클라이언트)가 직접 하고 있습니다.
+  // 결제가 모킹(가짜 확인창)인 지금은 문제없지만, 실제 PG(카카오페이 등)로
+  // 바꾼 뒤에도 이 패턴을 그대로 유지하면 심각한 보안 구멍이 생깁니다.
+  // 브라우저 개발자 도구 콘솔에서 누구나 subscribePlan('basic','card')를
+  // 직접 호출하면, 실제로 돈을 내지 않고도 구독이 활성화돼버립니다.
+  //
+  // 실제 PG 연동 시 반드시 이렇게 바꿔야 합니다:
+  //  1) 클라이언트는 결제창만 띄우고, 결제 자체는 PG사 SDK가 처리
+  //  2) PG사가 결제 완료 후 "우리 서버(Cloud Function)"로 웹훅을 보냄
+  //  3) 그 웹훅을 받은 Cloud Function이 PG사 서명을 검증한 뒤에만
+  //     Firestore의 subscriptions 문서를 쓰도록 함
+  //  4) Firestore 보안 규칙에서 subscriptions 컬렉션의 클라이언트
+  //     write 권한을 막아서, 오직 Cloud Function(Admin SDK)만 쓸 수
+  //     있게 해야 함
+  //
   //   예) const ok = await PaymentGateway.pay(provider, info.price);
   //       if (!ok) return;
   //   provider: 'kakaopay' | 'naverpay' | 'card'
-  // ────────────────────────────────────────────────
+  // ════════════════════════════════════════════════════════════
   const ok = await mockPayment(provider, info);
   if (!ok) return;
 
@@ -1511,6 +1577,138 @@ async function joinOtherFamily() {
   }
 }
 
+// ── 요양 시설 연결 ──────────────────────────────────────────
+// 흐름: 1) 코드 입력 → 2) roomLinks 문서 조회(아직 누구의 것도 아닌 pending 상태라
+// 코드를 아는 사람이면 누구나 조회 가능 — 보안 규칙에서 그렇게 허용해둠) →
+// 3) 시설명/호실 정보를 보여주고 명시적 동의를 받음 → 4) 동의해야만 그 문서의
+// familyId를 이 가족으로 채우고 status를 approved로 바꿈.
+let pendingFacilityLink = null; // 코드 조회 결과를 동의 모달까지 들고 가는 임시 변수
+
+function openFacilityCodeModal() {
+  document.getElementById('facility-link-code').value = '';
+  document.getElementById('facility-code-error').style.display = 'none';
+  document.getElementById('facility-code-modal').classList.add('show');
+}
+function closeFacilityCodeModal() {
+  document.getElementById('facility-code-modal').classList.remove('show');
+}
+function closeFacilityConsentModal() {
+  document.getElementById('facility-consent-modal').classList.remove('show');
+  pendingFacilityLink = null;
+}
+
+async function lookupFacilityCode() {
+  const code = document.getElementById('facility-link-code').value.trim().toUpperCase();
+  const errEl = document.getElementById('facility-code-error');
+  errEl.style.display = 'none';
+  if (!code) { errEl.textContent = '연결 코드를 입력해주세요.'; errEl.style.display = 'block'; return; }
+
+  const btn = document.getElementById('facility-code-btn');
+  btn.disabled = true; btn.textContent = '확인 중...';
+  try {
+    const linkDoc = await fbDb.collection('roomLinks').doc(code).get();
+    if (!linkDoc.exists) {
+      errEl.textContent = '코드를 찾을 수 없어요. 시설에 코드를 다시 확인해주세요.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const link = linkDoc.data();
+    if (link.status !== 'pending') {
+      errEl.textContent = link.status === 'approved' ? '이미 다른 가족이 동의한 코드예요.' : '이미 거절된 코드예요. 시설에 새 코드를 요청해주세요.';
+      errEl.style.display = 'block';
+      return;
+    }
+    const facSnap = await fbDb.collection('facilities').doc(link.facilityId).get();
+    const facilityName = facSnap.exists ? facSnap.data().name : '알 수 없는 시설';
+
+    pendingFacilityLink = { code, facilityId: link.facilityId, facilityName, roomNumber: link.roomNumber, elderName: link.elderName };
+    document.getElementById('facility-consent-desc').innerHTML =
+      `<b>${escHtml(facilityName)}</b>에서 <b>${escHtml(link.roomNumber)} ${escHtml(link.elderName)}</b> 어르신과<br>코코링 가족을 연결하려고 해요. 동의하시겠어요?`;
+    closeFacilityCodeModal();
+    document.getElementById('facility-consent-modal').classList.add('show');
+  } catch (e) {
+    console.error('연결 코드 조회 실패:', e);
+    errEl.textContent = '코드를 확인하는 중 문제가 생겼어요. 다시 시도해주세요.';
+    errEl.style.display = 'block';
+  } finally {
+    btn.disabled = false; btn.textContent = '코드 확인하기';
+  }
+}
+
+async function confirmFacilityLink(agreed) {
+  if (!pendingFacilityLink) { closeFacilityConsentModal(); return; }
+  const { code, facilityId } = pendingFacilityLink;
+  try {
+    if (agreed) {
+      await fbDb.collection('roomLinks').doc(code).update({
+        familyId: currentFamilyId,
+        status: 'approved',
+        approvedAt: Date.now(),
+      });
+      // 역인덱스: "이 가족이 어느 시설과 연결되어 있는지"를 빠르게 찾기 위한 문서.
+      // reports 보안 규칙 검증, 그리고 보호자가 연결을 끊을 때 모두 이걸로 조회함.
+      await fbDb.collection('familyFacilityLinks').doc(currentFamilyId).set({
+        familyId: currentFamilyId,
+        facilityId,
+        linkCode: code,
+        connectedAt: Date.now(),
+      });
+      alert('연결이 완료됐어요. 이제부터 통화 브리핑을 그 시설에서도 확인할 수 있어요.');
+    } else {
+      await fbDb.collection('roomLinks').doc(code).update({ status: 'rejected', rejectedAt: Date.now() });
+    }
+    closeFacilityConsentModal();
+    await renderFacilityLinkCard();
+  } catch (e) {
+    console.error('시설 연결 처리 실패:', e);
+    alert('처리 중 문제가 생겼어요. 다시 시도해주세요.');
+  }
+}
+
+// 현재 가족의 시설 연결 상태를 설정 탭에 표시
+async function renderFacilityLinkCard() {
+  const card = document.getElementById('facility-link-card');
+  if (!card || !currentFamilyId) return;
+  try {
+    const linkSnap = await fbDb.collection('familyFacilityLinks').doc(currentFamilyId).get();
+    if (!linkSnap.exists) {
+      card.innerHTML = `<div class="fam-row">
+        <div style="flex:1;">
+          <div class="fam-name">아직 연결된 시설이 없어요</div>
+          <div class="fam-role">시설에서 받은 연결 코드를 입력해보세요</div>
+        </div>
+        <button class="fam-remove" style="background:#16243A;color:white;" onclick="openFacilityCodeModal()">코드 입력</button>
+      </div>`;
+      return;
+    }
+    const link = linkSnap.data();
+    const facSnap = await fbDb.collection('facilities').doc(link.facilityId).get();
+    const facilityName = facSnap.exists ? facSnap.data().name : '연결된 시설';
+    card.innerHTML = `<div class="fam-row">
+      <div style="flex:1;">
+        <div class="fam-name">${escHtml(facilityName)}</div>
+        <div class="fam-role">연결됨 · 통화 브리핑을 공유하고 있어요</div>
+      </div>
+      <button class="fam-remove" onclick="disconnectFacility('${link.linkCode}')">연결 끊기</button>
+    </div>`;
+  } catch (e) {
+    console.error('시설 연결 상태 로드 실패:', e);
+    card.innerHTML = `<div class="fam-row"><div class="fam-name">불러오지 못했어요</div></div>`;
+  }
+}
+
+async function disconnectFacility(linkCode) {
+  if (!confirm('시설과의 연결을 끊을까요? 그 시설은 더 이상 통화 브리핑을 볼 수 없게 돼요.')) return;
+  try {
+    await fbDb.collection('roomLinks').doc(linkCode).update({ status: 'rejected', disconnectedAt: Date.now() });
+    await fbDb.collection('familyFacilityLinks').doc(currentFamilyId).delete();
+    await renderFacilityLinkCard();
+  } catch (e) {
+    console.error('연결 끊기 실패:', e);
+    alert('연결을 끊는 중 문제가 생겼어요.');
+  }
+}
+
 // 가족 구성원 제거 (owner 전용)
 async function removeMember(uid) {
   if (!isOwner()) { alert('구성원 제거는 대표 보호자만 할 수 있어요.'); return; }
@@ -1519,7 +1717,17 @@ async function removeMember(uid) {
   if (!confirm(`${(m && m.name) || '이 구성원'}님을 가족에서 제거할까요?`)) return;
   try {
     await fbDb.collection('familyMembers').doc(currentFamilyId + '_' + uid).delete();
-    await fbDb.collection('users').doc(uid).set({ familyId: null }, { merge: true });
+
+    // users.familyId는 "마지막으로 보던 가족"을 기억하는 캐시일 뿐이고,
+    // 진짜 소속 정보는 familyMembers 컬렉션에 있음. 그런데 이 사람이
+    // 다른 가족에도 속해 있는데 무작정 null로 덮어쓰면, 다음 로그인 시
+    // 엉뚱하게 "가족 없음" 화면부터 보게 되는 캐시 오염이 생김.
+    // 그러니 제거 후 남은 다른 소속 가족이 있으면 그쪽으로 캐시를 갱신함.
+    const remainingMemberships = await fbDb.collection('familyMembers')
+      .where('uid', '==', uid).get();
+    const nextFamilyId = remainingMemberships.empty ? null : remainingMemberships.docs[0].data().familyId;
+    await fbDb.collection('users').doc(uid).set({ familyId: nextFamilyId }, { merge: true });
+
     await loadFamilyData(currentFamilyId);
     renderSettingsTab();
   } catch (e) {
@@ -1858,8 +2066,20 @@ function goElderHome() {
 
 // ── Worker 설정 ─────────────────────────────────────────────
 function goCallScreen() {
+  if (!currentUser) {
+    alert('로그인이 필요해요.');
+    return;
+  }
+  // 어느 가족에도 속하지 않은 상태에서는 통화 자체를 막음.
+  // (이전엔 currentFamilyId가 없으면 구독 체크 자체를 건너뛰어서, 비정상적인
+  // 경로로 여기 도달했을 때 구독 없이 통화가 진행되고, 그 결과로 만들어진
+  // 리포트가 familyId 없이 저장돼 누구도 못 보는 유령 데이터가 될 위험이 있었음)
+  if (!currentFamilyId) {
+    alert('아직 연결된 가족이 없어요. 먼저 가족을 만들거나 참여해주세요.');
+    return;
+  }
   // 구독 만료 시 가족 전체 서비스 제한
-  if (currentFamilyId && !isSubscriptionActive()) {
+  if (!isSubscriptionActive()) {
     alert('구독이 만료되어 통화를 이용할 수 없어요.\n대표 보호자가 구독을 갱신하면 다시 이용할 수 있어요.');
     return;
   }
@@ -1892,8 +2112,13 @@ function dedupeSpeech(s) {
   s = (s || '').trim().replace(/\s+/g, ' ');
   if (!s) return '';
   let words = s.split(' ');
-  // 1~4단어 구절이 연속 반복되면 하나만 남김
-  for (let len = 4; len >= 1; len--) {
+  // 2~4단어 구절이 연속 반복되면 하나만 남김.
+  // (한 단어(len=1) 반복은 일부러 빼둠 — "빨리 빨리", "아이고 아이고"처럼
+  //  어르신이 강조하려고 의도적으로 한 단어를 반복하는 자연스러운 발화 패턴을
+  //  음성인식 오류로 오인해서 지워버리면 안 되기 때문. 2단어 이상이 토씨까지
+  //  정확히 반복되는 경우는 음성인식이 같은 말을 중복으로 인식했을 가능성이
+  //  훨씬 높아서, 그 경우만 정리함.)
+  for (let len = 4; len >= 2; len--) {
     const out = [];
     let i = 0;
     while (i < words.length) {
@@ -2239,6 +2464,14 @@ async function startCall() {
   if (!recognition) {
     alert('이 브라우저는 음성 인식을 지원하지 않아요. 크롬(Chrome) 브라우저로 다시 시도해주세요.\n(사파리·파이어폭스 일부 버전, 인앱 브라우저에서는 지원되지 않을 수 있어요)');
   }
+  // 이전 통화가 정상 종료(endCall)를 거치지 않고 끝났을 경우(뒤로가기, 강제
+  // 새로고침 전 등) 남아있을 수 있는 타이머/잔여 발화를 깨끗이 정리함.
+  // 이걸 안 하면, 옛 통화의 타이머가 새 통화 시작 직후 발사되면서 새 통화의
+  // pendingSpeech에 옛 발화 잔재가 끼어드는 미묘한 버그가 생길 수 있음.
+  if (silenceTimer) { clearTimeout(silenceTimer); silenceTimer = null; }
+  pendingSpeech = '';
+  if (isListening && recognition) { try { recognition.stop(); } catch(e){} }
+
   callEnded = false;
   history = [];
   turnCount = 0;
@@ -2354,7 +2587,7 @@ async function onElderSpeech(text) {
       // 음성은 정확히 인식됐는데(text가 정상 전달됨) AI 서버 호출 자체가 실패한 경우.
       // "잘 못 들었어요"라고 하면 음성인식 문제처럼 보여 혼동을 주므로, 통신 문제임을 명확히 함.
       console.error('AI 응답 오류 (음성 인식은 정상, 서버 호출 실패):', e);
-      if (e && e.message === '429') {
+      if (e && /429/.test(e.message || '')) {
         reply = '죄송해요, 지금 사용량이 많아서 잠시 응답이 늦어지고 있어요. 잠시 후 다시 말씀해주시겠어요?';
       } else {
         reply = '죄송해요, 지금 코코 서버와 연결이 불안정해요. 잠시 후 다시 말씀해주시겠어요?';
@@ -2438,8 +2671,10 @@ async function startPhotoCapture() {
 function takePhoto() {
   const video = document.getElementById('photo-video');
   const canvas = document.getElementById('photo-canvas');
-  // 작게 압축 (가로 최대 400px) — Firestore에 넣을 수 있는 크기로
-  const maxW = 400;
+  // 가로 최대 600px로 압축 — 사진은 이제 Cloud Storage에 올라가므로 Firestore의
+  // 1MB 문서 제한과는 무관하지만, 모바일 데이터 사용량과 업로드 속도를 위해
+  // 여전히 적당히 압축함.
+  const maxW = 600;
   const scale = Math.min(1, maxW / video.videoWidth);
   canvas.width = video.videoWidth * scale;
   canvas.height = video.videoHeight * scale;
@@ -2447,7 +2682,7 @@ function takePhoto() {
   // 셀카처럼 좌우 반전
   ctx.translate(canvas.width, 0); ctx.scale(-1, 1);
   ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-  capturedPhoto = canvas.toDataURL('image/jpeg', 0.55); // 압축 JPEG base64
+  capturedPhoto = canvas.toDataURL('image/jpeg', 0.7); // 압축 JPEG base64
   stopPhotoStream();
   document.getElementById('photo-preview').src = capturedPhoto;
   document.getElementById('photo-camera').style.display = 'none';
@@ -2581,17 +2816,37 @@ ${transcript}
   report.대화내용 = transcript; // 원본 대화도 함께 저장
   report.생성시각 = now.getTime(); // 정렬용
   report.familyId = currentFamilyId || null; // 가족 단위 공유
-  if (photoData) report.사진 = photoData; // 셀프 카메라 사진 (압축 base64)
+
+  // 사진은 Firestore 문서에 직접 넣지 않고 Cloud Storage에 올린 뒤 URL만 저장함.
+  // (이유: Firestore 문서는 1MB 용량 제한이 있어서, base64 사진을 통째로 넣으면
+  //  문서가 너무 커져 저장 자체가 실패할 수 있고, 그러면 사진 때문에 브리핑
+  //  텍스트까지 같이 날아가버림. Storage는 파일 전용이라 이 제한이 없음.)
+  if (photoData && fbStorage && currentFamilyId) {
+    try {
+      const path = `families/${currentFamilyId}/photos/${now.getTime()}.jpg`;
+      const ref = fbStorage.ref(path);
+      await ref.putString(photoData, 'data_url');
+      report.사진 = await ref.getDownloadURL();
+      report.사진경로 = path; // 나중에 삭제할 때 필요
+    } catch (e) {
+      console.error('사진 업로드 실패(브리핑 저장은 계속 진행):', e);
+      // 사진 업로드가 실패해도 브리핑 텍스트는 그대로 저장되도록 진행함
+    }
+  }
 
   reportList.unshift(report); // 메모리에도 최신순 반영
 
   // Firestore에 브리핑/통화기록 저장 (reports 컬렉션, familyId로 공유)
+  let saveFailed = false;
   if (firebaseReady && currentUser && currentFamilyId) {
     try {
       await fbDb.collection('reports').add(report);
     } catch (e) {
       console.error('브리핑 저장 실패:', e);
+      saveFailed = true;
     }
+  } else {
+    saveFailed = true;
   }
 
   // 생애 기록관(Life Archive) 자동 추출 — 실패해도 통화 흐름엔 영향 없음
@@ -2602,7 +2857,9 @@ ${transcript}
   }
 
   document.getElementById('end-title').textContent = '통화가 종료됐어요';
-  document.getElementById('end-desc').innerHTML = '오늘도 코코와 즐거운 대화 나눠주셔서<br>감사해요! 자녀분께 브리핑을 전달했어요.';
+  document.getElementById('end-desc').innerHTML = saveFailed
+    ? '오늘도 코코와 즐거운 대화 나눠주셔서<br>감사해요! 다만 브리핑 저장에 문제가 있어<br>자녀분께 전달이 안 됐을 수 있어요. 인터넷 연결을<br>확인하고 다시 시도해주세요.'
+    : '오늘도 코코와 즐거운 대화 나눠주셔서<br>감사해요! 자녀분께 브리핑을 전달했어요.';
 }
 
 // ════════════════════════════════════════════════════════════
@@ -2625,7 +2882,6 @@ function normLife(s) {
 async function extractAndSaveLifeArchive(transcript) {
   if (!firebaseReady || !currentUser || !currentFamilyId) return;
   if (!transcript || transcript.length < 20) return;
-  if (!GEMINI_KEY) return; // 데모(키 없음)에서는 추출 생략
 
   const prompt = `당신은 어르신의 생애 기록을 정리하는 전문가입니다. 아래는 AI 코코와 어르신의 실제 통화 내용입니다. 이 대화에서 어르신의 "생애 정보"를 추출하세요.
 
@@ -2680,36 +2936,62 @@ ${transcript}
     updatedAt: now
   }, { merge: true });
 
-  // 2) lifeEvents — 연표 사건 (제목 중복 제거)
+  // 2) lifeEvents — 연표 사건. 제목이 같아도 그냥 버리지 않고, 새로운
+  //    디테일이 있으면 기존 내용에 이어붙임. (이전엔 제목만 같으면 통째로
+  //    무시해서, "결혼" 사건에 대해 통화마다 다른 디테일이 나와도 첫 번째
+  //    것만 남고 나머지는 사라지는 문제가 있었음 — "차근차근 누적"이라는
+  //    목적과 정반대로 동작했음)
   if (Array.isArray(data.events)) {
     const evSnap = await fbDb.collection('lifeEvents')
       .where('familyId', '==', currentFamilyId).get();
-    const existingTitles = new Set(evSnap.docs.map(d => normLife(d.data().제목)));
+    const existingByTitle = new Map(
+      evSnap.docs.map(d => [normLife(d.data().제목), { id: d.id, data: d.data() }])
+    );
+    const writes = [];
     for (const ev of data.events) {
       if (!ev || !ev.제목) continue;
-      if (existingTitles.has(normLife(ev.제목))) continue;
-      existingTitles.add(normLife(ev.제목));
-      await fbDb.collection('lifeEvents').add({
-        familyId: currentFamilyId,
-        제목: String(ev.제목).trim(),
-        시기: String(ev.시기 || '').trim(),
-        내용: String(ev.내용 || '').trim(),
-        생성시각: now
-      });
+      const key = normLife(ev.제목);
+      const newContent = String(ev.내용 || '').trim();
+      const existing = existingByTitle.get(key);
+      if (existing) {
+        // 같은 제목의 사건이 이미 있으면, 내용이 실질적으로 다를 때만 이어붙임
+        const prevContent = existing.data.내용 || '';
+        if (newContent && normLife(newContent) !== normLife(prevContent) && !prevContent.includes(newContent)) {
+          writes.push(
+            fbDb.collection('lifeEvents').doc(existing.id).update({
+              내용: prevContent ? `${prevContent} / ${newContent}` : newContent,
+              updatedAt: now
+            })
+          );
+        }
+        // 내용이 똑같거나 새 정보가 없으면 아무것도 안 함 (불필요한 쓰기 방지)
+      } else {
+        writes.push(
+          fbDb.collection('lifeEvents').add({
+            familyId: currentFamilyId,
+            제목: String(ev.제목).trim(),
+            시기: String(ev.시기 || '').trim(),
+            내용: newContent,
+            생성시각: now
+          })
+        );
+        existingByTitle.set(key, { id: null, data: { 내용: newContent } }); // 같은 배치 안 중복 방지
+      }
     }
+    await Promise.all(writes);
   }
 
-  // 3) memoryTags — 키워드 빈도 누적
+  // 3) memoryTags — 키워드 빈도 누적 (병렬 처리로 Firestore 왕복 횟수를 줄임)
   if (Array.isArray(data.tags)) {
-    for (const tag of data.tags) {
+    await Promise.all(data.tags.map(async (tag) => {
       const t = String(tag || '').trim();
-      if (!t) continue;
+      if (!t) return;
       const id = currentFamilyId + '_' + normLife(t).replace(/[^\w가-힣]/g, '');
       const tref = fbDb.collection('memoryTags').doc(id);
       const tsnap = await tref.get();
       const count = tsnap.exists ? (tsnap.data().count || 0) + 1 : 1;
       await tref.set({ familyId: currentFamilyId, tag: t, count, updatedAt: now }, { merge: true });
-    }
+    }));
   }
 }
 
@@ -3127,12 +3409,20 @@ async function deletePhoto(reportId) {
   if (!isOwner()) { alert('사진 삭제는 대표 보호자만 할 수 있어요.'); return; }
   if (!confirm('사진을 삭제할까요? 삭제하면 되돌릴 수 없어요.')) return;
   try {
+    const r = reportList.find(x => x._id === reportId);
+
+    // Storage에 실제 파일이 있으면 같이 삭제 (사진경로가 저장된 최신 데이터만 해당)
+    if (r && r.사진경로 && fbStorage) {
+      try { await fbStorage.ref(r.사진경로).delete(); }
+      catch (e) { console.warn('Storage 파일 삭제 실패(문서 업데이트는 계속 진행):', e); }
+    }
+
     await fbDb.collection('reports').doc(reportId).update({
-      사진: firebase.firestore.FieldValue.delete()
+      사진: firebase.firestore.FieldValue.delete(),
+      사진경로: firebase.firestore.FieldValue.delete()
     });
     // 로컬 캐시 갱신
-    const r = reportList.find(x => x._id === reportId);
-    if (r) delete r.사진;
+    if (r) { delete r.사진; delete r.사진경로; }
     // 현재 보이는 화면들 다시 그리기
     if (document.getElementById('detail-modal').classList.contains('show') && r) {
       document.getElementById('detail-content').innerHTML = renderBriefCard(r);
@@ -3153,19 +3443,29 @@ async function deletePhoto(reportId) {
 function renderAnalysisTab() {
   // 위험 신호 모으기
   const risks = [];
+  // "특정 위험신호"는 실제 발생한 그대로 보여줌 (AI가 매 통화 직접 판단한 결과라 1회도 의미 있음)
   reportList.forEach(r => {
     if (r.위험신호 && r.위험신호 !== '없음') {
       risks.push({ title: '위험 신호 감지', desc: r.위험신호 });
     }
-    const cog = r.인지평가 || {};
-    if (cog.단기기억 === '주의' || cog.단기기억 === '확인필요') {
-      if (!risks.find(x => x.title === '단어 찾기 어려움'))
-        risks.push({ title: '단어 찾기 어려움', desc: '익숙한 단어를 떠올리는 데 평소보다 시간이 걸렸습니다.' });
-    }
   });
+  // "단어 찾기 어려움"은 단 1회 통화만으로 판단하면 그날 컨디션이나 통화 환경(잡음 등)
+  // 때문에 우연히 낮게 나온 것일 수 있어, 불필요하게 불안을 줄 수 있음.
+  // 최근 5회 통화 중 2회 이상 반복됐을 때만 의미 있는 신호로 간주함.
+  const recent5 = reportList.slice(0, 5);
+  const memConcernCount = recent5.filter(r => {
+    const cog = r.인지평가 || {};
+    return cog.단기기억 === '주의' || cog.단기기억 === '확인필요';
+  }).length;
+  if (memConcernCount >= 2) {
+    risks.push({
+      title: '단어 찾기 어려움 (반복)',
+      desc: `최근 통화 ${recent5.length}회 중 ${memConcernCount}회에서 단어 회상 지연이 감지됐어요. 반복되는 패턴이니 한번 살펴보시면 좋겠어요.`
+    });
+  }
   if (risks.length === 0) {
     risks.push(reportList.length > 0
-      ? { title: '특이 신호 없음', desc: '최근 통화에서 주의할 만한 변화가 감지되지 않았어요.' }
+      ? { title: '특이 신호 없음', desc: `최근 통화 ${Math.min(reportList.length, 5)}회 기준으로는 반복되는 위험 신호가 감지되지 않았어요.` }
       : { title: '아직 분석할 데이터가 없어요', desc: '통화가 누적되면 위험 신호를 분석해서 보여드려요.' });
   }
 
@@ -3179,7 +3479,7 @@ function renderAnalysisTab() {
   const scores = computeCogScores();
   document.getElementById('cog-total').textContent = scores.hasData ? scores.total + '점' : '-';
   const metrics = [
-    { name: '언어 유창성', val: scores.언어 },
+    { name: '종합 인지 지표', val: scores.종합 },
     { name: '기억력', val: scores.기억 },
     { name: '반응 속도', val: scores.반응 },
   ];
@@ -3212,15 +3512,19 @@ function computeCogScores() {
   });
   const avg = a => a.length ? Math.round(a.reduce((x,y)=>x+y,0)/a.length) : null;
   const 기억 = avg(memScores);
-  const 언어 = avg(total);
+  // 실제 인지평가 항목은 시간인지·장소인지·단기기억·계산·실행추론 다섯 가지뿐이고
+  // "언어" 평가는 따로 없음. 이 값은 그 다섯 항목 전체의 평균이므로 "종합 지표"라고
+  // 부르는 게 정확함. (이전엔 "언어 유창성"이라는 화면 라벨과 실제 계산 내용이
+  // 어긋나 있었음 — 노인 돌봄 지표는 라벨과 실제 의미가 정확히 일치해야 함)
+  const 종합 = avg(total);
   // 반응 속도는 아직 실제로 측정하는 로직이 없어 항목 자체를 비워둠(가짜 숫자를 보여주지 않기 위함)
   const 반응 = null;
-  const validScores = [기억, 언어].filter(v => v != null);
+  const validScores = [기억, 종합].filter(v => v != null);
   const hasData = validScores.length > 0;
   const totalScore = hasData ? Math.round(validScores.reduce((x,y)=>x+y,0)/validScores.length) : null;
   let note = hasData ? '최근 통화 기준 인지 지표예요.' : '아직 통화 기록이 없어 인지 지표를 계산할 수 없어요. 통화가 누적되면 여기 표시돼요.';
   if (hasData && 기억 != null && 기억 < 70) note = '기억력 지표가 다소 낮아요. 단어 회상 지연이 반복되면 전문의 상담을 권장합니다.';
-  return { total: totalScore, 언어, 기억, 반응, note, hasData };
+  return { total: totalScore, 종합, 기억, 반응, note, hasData };
 }
 
 // 이번 주(월요일~일요일)의 실제 날짜 7개를 'YYYY-MM-DD' 문자열로 반환
@@ -3294,6 +3598,9 @@ function renderSettingsTab() {
 
   // 구독 카드
   renderSubscriptionCard();
+
+  // 요양 시설 연결 카드
+  renderFacilityLinkCard();
 
   // 가족 구성원 목록 (owner는 member 제거 버튼 표시)
   const card = document.getElementById('family-members-card');
