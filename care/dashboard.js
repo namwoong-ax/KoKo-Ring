@@ -148,15 +148,19 @@ async function loadRoomData() {
     }
 
     // 2) 연결된 각 가족의 가장 최근 리포트(오늘 것이 있으면 오늘 것)를 가져옴
+    // (where + orderBy 조합은 Firestore 복합 색인이 미리 있어야 하는데, 그게
+    //  없으면 쿼리가 에러로 실패함. 색인을 따로 안 만들어도 되게, orderBy 없이
+    //  where만 쓰고 정렬은 받아온 다음 자바스크립트에서 직접 처리함.)
     reportsCache = {};
     await Promise.all(roomLinksCache.map(async (link) => {
       try {
         const repSnap = await fbDb.collection('reports')
           .where('familyId', '==', link.familyId)
-          .orderBy('생성시각', 'desc')
-          .limit(5)
+          .limit(20)
           .get();
-        reportsCache[link.familyId] = repSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        const docs = repSnap.docs.map(d => ({ id: d.id, ...d.data() }));
+        docs.sort((a, b) => (b.생성시각 || 0) - (a.생성시각 || 0));
+        reportsCache[link.familyId] = docs.slice(0, 5);
       } catch (e) {
         console.error('리포트 로드 실패 (familyId=' + link.familyId + '):', e);
         reportsCache[link.familyId] = [];
