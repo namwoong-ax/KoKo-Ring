@@ -1046,7 +1046,7 @@
 // ════════════════════════════════════════════════════════════
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.2.1';
+const APP_VERSION = 'v6.3.0';
 const APP_VERSION_DATE = '2026-06-18';
 
 let userName = '';
@@ -2447,6 +2447,11 @@ async function startCall() {
   document.getElementById('sound-btn').classList.remove('active');
   setStatus('연결 중...');
 
+  // Koko Brain — 통화 시작 전에 이번 통화에 쓸 콘텍스트(인터뷰 진행도, 건강
+  // 관찰, 다음 오프닝, 관련 기억)를 미리 읽어옴. 실패해도 빈 콘텍스트로
+  // 안전하게 진행되므로 통화 시작 자체가 막히지는 않음.
+  await prepareKokoBrain();
+
   // "끼어들기" 보조 기능(getUserMedia로 별도 마이크 스트림을 잡는 음량 감지)은
   // SpeechRecognition과 같은 마이크 자원을 동시에 점유하면서 일부 브라우저에서
   // 음성 인식이 시작되자마자 즉시 종료되는("띵동띵동" 반복) 충돌을 일으킬 수 있어
@@ -2458,9 +2463,12 @@ async function startCall() {
   let reply;
   if (currentUser) {
     try {
-      const trigger = '(통화 시작. 코코가 따뜻하게 첫 인사를 건넨다. 짧게 2문장 이내. 이모지 사용 금지.)';
+      // Koko Brain이 마련한 다음 오프닝이 있으면, 그걸 우선 쓰도록 트리거에 반영
+      const trigger = kokoBrainCtx && kokoBrainCtx.nextOpening
+        ? `(통화 시작. 코코가 따뜻하게 첫 인사를 건넨 뒤, 지난번에 이어가기로 한 "${kokoBrainCtx.nextOpening}" 쪽으로 자연스럽게 들어간다. 짧게 2~3문장 이내. 이모지 사용 금지.)`
+        : '(통화 시작. 코코가 따뜻하게 첫 인사를 건넨다. 짧게 2문장 이내. 이모지 사용 금지.)';
       history = [{ role: 'user', content: trigger }];
-      reply = await callGemini(history, 800);
+      reply = await callGemini(history, 800, true);
       if (!reply || reply === '__SAFETY_BLOCKED__') {
         reply = '안녕하세요! 코코예요. 오늘 하루 어떻게 보내셨어요?';
       }
@@ -2521,7 +2529,7 @@ async function onElderSpeech(text) {
     }
 
     try {
-      reply = await callGemini(messagesToSend, 800);
+      reply = await callGemini(messagesToSend, 800, true);
 
       // Safety block이거나 빈 응답이면 공감 fallback으로 대화 유지
       if (!reply || reply === '__SAFETY_BLOCKED__') {
@@ -2816,6 +2824,9 @@ ${transcript}
     console.error('생애 기록 추출 실패:', e);
   }
 
+  // 이번 통화에서 쓴 Koko Brain 콘텍스트는 다음 통화 때 새로 로드해야 하므로 비움
+  kokoBrainCtx = null;
+
   document.getElementById('end-title').textContent = '통화가 종료됐어요';
   document.getElementById('end-desc').innerHTML = saveFailed
     ? '오늘도 코코와 즐거운 대화 나눠주셔서<br>감사해요! 다만 브리핑 저장에 문제가 있어<br>자녀분께 전달이 안 됐을 수 있어요. 인터넷 연결을<br>확인하고 다시 시도해주세요.'
@@ -2838,29 +2849,207 @@ function normLife(s) {
   return String(s || '').trim().replace(/\s+/g, ' ').toLowerCase();
 }
 
+// ════════════════════════════════════════════════════════════
+//  Koko Brain — 통화 전/후 컨텍스트 관리 계층
+//
+//  구조: 전화 시작 → Koko Brain(콘텍스트 조립) → Gemini(대화 생성)
+//        → 통화 → Koko Brain(분석) → Firestore 저장
+//
+//  Gemini는 사용자를 기억하지 못하므로, 매 통화마다 Koko Brain이
+//  Firestore에서 인터뷰 진행도/건강 관찰/다음 통화 시작 멘트/관련
+//  기억을 읽어와 시스템 프롬프트에 동적으로 주입한다.
+//
+//  Firestore: kokoBrainState/{familyId} 문서 하나에 다음을 보관:
+//    interviewProgress: {가족:90, 직장:40, 군대:20, 취미:80, 첫사랑:0}
+//    healthObservation: {활동량:'감소', 말수:'보통', 수면:'불규칙', 기억력:'정상'}
+//    nextOpening: '지난번 군대 이야기 이어서 듣고 싶어요.' (다음 통화 시작 멘트)
+//    nextConversationGoal: '군대 이야기에서 첫 직장 이야기로 자연스럽게 연결'
+//    updatedAt: timestamp
+// ════════════════════════════════════════════════════════════
+const INTERVIEW_TOPICS = ['가족', '직장', '군대', '취미', '첫사랑', '고향', '결혼'];
+
+// 통화 시작 직전에 호출 — Firestore에서 콘텍스트를 모아 동적 시스템 프롬프트 조각을 만듦.
+// 실패해도(첫 통화라 데이터가 아직 없는 경우 등) 통화 자체는 항상 진행되어야 하므로,
+// 모든 단계가 빈 데이터에 대해 안전하게 동작하도록 함.
+async function loadKokoBrainContext(familyId) {
+  const ctx = {
+    interviewProgress: {},
+    healthObservation: {},
+    nextOpening: '',
+    nextConversationGoal: '',
+    selectedMemories: [], // Retrieval로 골라낸, 이번 통화에 쓸 기억 5~10개
+  };
+  if (!firebaseReady || !familyId) return ctx;
+
+  try {
+    const stateSnap = await fbDb.collection('kokoBrainState').doc(familyId).get();
+    if (stateSnap.exists) {
+      const d = stateSnap.data();
+      ctx.interviewProgress = d.interviewProgress || {};
+      ctx.healthObservation = d.healthObservation || {};
+      ctx.nextOpening = d.nextOpening || '';
+      ctx.nextConversationGoal = d.nextConversationGoal || '';
+    }
+  } catch (e) {
+    console.error('Koko Brain 상태 로드 실패(빈 콘텍스트로 진행):', e);
+  }
+
+  // Retrieval — memoryTags 중 "최근 30일 이내 언급" 또는 "중요도 4 이상"인 것 위주로
+  // 최대 8개만 골라서 프롬프트에 넣음. 모든 기억을 다 넣으면 통화가 누적될수록
+  // 토큰이 비대해지고, 관련 없는 기억이 섞여 대화가 산만해지므로 의도적으로 제한함.
+  try {
+    const tagSnap = await fbDb.collection('memoryTags').where('familyId', '==', familyId).get();
+    const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
+    const now = Date.now();
+    const candidates = tagSnap.docs.map(d => d.data());
+    const scored = candidates.map(t => {
+      const recent = t.lastMentionedAt && (now - t.lastMentionedAt) <= THIRTY_DAYS;
+      const importance = t.importance || 1;
+      // 점수 = 중요도(1~5) + 최근성 가중치. 최근 언급일수록, 중요할수록 우선.
+      const score = importance + (recent ? 2 : 0);
+      return { tag: t.tag, score, importance, recent };
+    }).sort((a, b) => b.score - a.score);
+    ctx.selectedMemories = scored.slice(0, 8).map(s => s.tag);
+  } catch (e) {
+    console.error('기억 선별(Retrieval) 실패(빈 목록으로 진행):', e);
+  }
+
+  return ctx;
+}
+
+// Koko Brain 콘텍스트를 Gemini 시스템 프롬프트에 추가할 텍스트 조각으로 변환
+function buildKokoBrainPromptAddon(ctx) {
+  if (!ctx) return '';
+  const parts = [];
+
+  if (ctx.nextOpening) {
+    parts.push(`[다음 통화 시작 멘트 — 우선 사용]\n지난 통화 마무리에서 다음에 이걸 먼저 물어보기로 했어요: "${ctx.nextOpening}"\n안부 인사 후 자연스럽게 이 주제로 들어가세요. 다만 어르신이 먼저 다른 이야기를 꺼내면 그쪽을 따라가도 좋아요.`);
+  }
+
+  const progress = ctx.interviewProgress || {};
+  const unfinished = INTERVIEW_TOPICS.filter(t => (progress[t] || 0) < 70);
+  if (unfinished.length > 0) {
+    const progressText = INTERVIEW_TOPICS
+      .filter(t => progress[t] !== undefined)
+      .map(t => `${t} ${progress[t]}%`)
+      .join(', ');
+    parts.push(`[아직 다 못 들은 이야기]\n${progressText ? `지금까지 진행도: ${progressText}.\n` : ''}아직 충분히 못 들은 주제: ${unfinished.join(', ')}. 자연스러운 흐름에서 이 중 하나로 이어가면 좋아요. 질문 리스트처럼 던지지 말고, 지금 대화 흐름과 연결해서 물어보세요.`);
+  }
+
+  if (ctx.selectedMemories && ctx.selectedMemories.length > 0) {
+    parts.push(`[이전에 나눴던 이야기 — 참고용]\n${ctx.selectedMemories.join(', ')}. 관련 있을 때만 자연스럽게 언급하세요. 검사하듯 다시 묻지 마세요.`);
+  }
+
+  const health = ctx.healthObservation || {};
+  const healthNotes = Object.entries(health).filter(([k, v]) => v).map(([k, v]) => `${k}: ${v}`);
+  if (healthNotes.length > 0) {
+    parts.push(`[최근 관찰 — 참고만, 절대 검사처럼 묻지 말 것]\n${healthNotes.join(', ')}. 이 내용을 직접 언급하거나 확인 질문하지 마세요. 자연스러운 대화 속에서 관련 신호가 또 보이는지만 살피세요.`);
+  }
+
+  if (ctx.nextConversationGoal) {
+    parts.push(`[이번 통화 목표]\n${ctx.nextConversationGoal}`);
+  }
+
+  return parts.length > 0 ? '\n\n' + parts.join('\n\n') : '';
+}
+
+// 통화 시작 직전 호출. 콘텍스트를 로드해 전역 상태에 보관하고, 시작 멘트에 반영함.
+let kokoBrainCtx = null;
+async function prepareKokoBrain() {
+  kokoBrainCtx = await loadKokoBrainContext(currentFamilyId);
+  return kokoBrainCtx;
+}
+
+// 통화 종료 후 — 분석 결과(JSON)를 받아 kokoBrainState/{familyId}에 저장.
+// extractAndSaveLifeArchive()가 같은 AI 응답에서 이 필드들도 함께 받아오므로,
+// AI를 추가로 한 번 더 호출하지 않음(비용·속도 절약).
+async function saveKokoBrainState(familyId, analysis) {
+  if (!firebaseReady || !familyId || !analysis) return;
+  try {
+    const ref = fbDb.collection('kokoBrainState').doc(familyId);
+    const snap = await ref.get();
+    const prevProgress = snap.exists ? (snap.data().interviewProgress || {}) : {};
+
+    // interviewProgress는 덮어쓰지 않고 "더 큰 값으로만 갱신" — 한 번 90%까지
+    // 갔던 주제가 어느 통화에서 분석이 애매하게 나와 70%로 떨어지는 걸 방지.
+    const incoming = analysis.interviewProgress || {};
+    const mergedProgress = { ...prevProgress };
+    Object.keys(incoming).forEach(topic => {
+      const val = Number(incoming[topic]) || 0;
+      mergedProgress[topic] = Math.max(prevProgress[topic] || 0, Math.min(100, val));
+    });
+
+    await ref.set({
+      familyId,
+      interviewProgress: mergedProgress,
+      healthObservation: analysis.healthObservations && analysis.healthObservations.length > 0
+        ? (analysis.healthObservationsMap || mergedHealthFromArray(analysis.healthObservations, snap.exists ? snap.data().healthObservation : {}))
+        : (snap.exists ? snap.data().healthObservation : {}),
+      nextOpening: analysis.nextOpening || '',
+      nextConversationGoal: analysis.nextConversationGoal || '',
+      updatedAt: Date.now(),
+    }, { merge: true });
+  } catch (e) {
+    console.error('Koko Brain 상태 저장 실패:', e);
+  }
+}
+
+// healthObservations가 ["활동량 감소", "말수 감소"] 같은 문장 배열로 올 수도 있어서,
+// 기존 맵 형태와 합치기 위한 보조 변환(완벽한 파싱이 아니라 최선 추정).
+function mergedHealthFromArray(arr, prevMap) {
+  const map = { ...(prevMap || {}) };
+  (arr || []).forEach(s => {
+    const text = String(s || '').trim();
+    if (!text) return;
+    // "활동량 감소" 같은 패턴에서 항목명만 키로 사용(못 찾으면 전체 문장을 그냥 누적 메모로)
+    const knownKeys = ['활동량', '말수', '수면', '기억력', '식욕', '기분'];
+    const found = knownKeys.find(k => text.includes(k));
+    if (found) {
+      const valuePart = text.replace(found, '').trim();
+      map[found] = valuePart || text;
+    } else {
+      map['기타'] = map['기타'] ? `${map['기타']}, ${text}` : text;
+    }
+  });
+  return map;
+}
+
 // 통화에서 생애 정보 추출 후 Firestore에 누적 (중복 제거)
 async function extractAndSaveLifeArchive(transcript) {
   if (!firebaseReady || !currentUser || !currentFamilyId) return;
   if (!transcript || transcript.length < 20) return;
 
-  const prompt = `당신은 어르신의 생애 기록을 정리하는 전문가입니다. 아래는 AI 코코와 어르신의 실제 통화 내용입니다. 이 대화에서 어르신의 "생애 정보"를 추출하세요.
+  // Koko Brain의 "Conversation Analyzer" 역할 — 생애 정보 추출과 함께
+  // 인터뷰 진행도, 건강 관찰, 다음 통화 시작 멘트까지 같은 호출에서 한 번에 받음
+  // (AI를 분석용으로 또 호출하면 비용·속도가 두 배가 되므로, 통화 종료 시
+  // 이미 하던 생애기록 추출 호출에 필드를 추가하는 방식으로 합침).
+  const progressContext = kokoBrainCtx && kokoBrainCtx.interviewProgress
+    ? `\n[참고 — 지금까지 인터뷰 진행도]\n${INTERVIEW_TOPICS.map(t => `${t}: ${kokoBrainCtx.interviewProgress[t] || 0}%`).join(', ')}`
+    : '';
+
+  const prompt = `당신은 어르신의 생애 기록을 정리하는 전문가입니다. 아래는 AI 코코와 어르신의 실제 통화 내용입니다. 이 대화에서 어르신의 "생애 정보"와 "다음 통화 준비 정보"를 추출하세요.
 
 [실제 대화]
 ${transcript}
+${progressContext}
 
 [규칙 — 매우 중요]
 - 반드시 위 대화에 "실제로 어르신이 말한 내용"만 추출하세요. 추측·창작 금지.
 - 해당 정보가 대화에 없으면 그 항목은 빈 배열 []로 두세요.
 - 각 항목은 짧고 사실 위주의 문장으로(예: "고향은 전남 순천", "큰아들이 부산에 산다").
 - 인생의 중요한 사건(결혼, 군대, 첫 직장, 이사, 자녀 출생, 큰 행사 등)은 events에 시기와 함께.
-- tags에는 대화에서 자주/인상 깊게 나온 핵심 키워드(인물·장소·사물)를 3~6개.
+- tags에는 대화에서 자주/인상 깊게 나온 핵심 키워드(인물·장소·사물)를 3~6개. 각 태그마다 importance(1~5, 5가 가장 중요하고 다음 통화에서도 다시 언급할 가치가 있는 정도)를 매기세요.
+- interviewProgress: 위 [지금까지 인터뷰 진행도]를 참고해서, 이번 통화에서 그 주제가 다뤄졌다면 진행도를 추정해 올려주세요(0~100). 다뤄지지 않은 주제는 포함하지 마세요.
+- healthObservations: 활동량/말수/수면/기억력/식욕/기분 등에서 "대화 흐름상 드러난" 변화만. 검사 결과처럼 단정하지 말고 짧은 메모 형태로(예: "말수 평소보다 적음").
+- nextOpening: 이번 통화에서 다 못 다룬 흥미로운 주제가 있다면, 다음 통화를 자연스럽게 시작할 한 문장. 없으면 빈 문자열.
+- nextConversationGoal: 다음 통화에서 자연스럽게 이어가면 좋을 주제 전환 계획을 한 문장으로.
 
 [출력 — 순수 JSON만. 설명/마크다운/코드블록 없이]
-{"고향":[],"가족관계":[],"직업":[],"결혼이야기":[],"자녀이야기":[],"손주이야기":[],"취미":[],"가치관":[],"자주쓰는표현":[],"events":[{"제목":"","시기":"","내용":""}],"tags":[]}`;
+{"고향":[],"가족관계":[],"직업":[],"결혼이야기":[],"자녀이야기":[],"손주이야기":[],"취미":[],"가치관":[],"자주쓰는표현":[],"events":[{"제목":"","시기":"","내용":""}],"tags":[{"tag":"","importance":3}],"interviewProgress":{},"healthObservations":[],"nextOpening":"","nextConversationGoal":""}`;
 
   let data = null;
   try {
-    const raw = await callGemini([{ role: 'user', content: prompt }], 1200);
+    const raw = await callGemini([{ role: 'user', content: prompt }], 1500);
     let clean = raw.replace(/```json/gi, '').replace(/```/g, '').trim();
     const s = clean.indexOf('{'), e = clean.lastIndexOf('}');
     if (s !== -1 && e !== -1) clean = clean.slice(s, e + 1);
@@ -2872,6 +3061,14 @@ ${transcript}
   if (!data) return;
 
   const now = Date.now();
+
+  // Koko Brain 상태(인터뷰 진행도, 건강 관찰, 다음 오프닝)도 같이 저장.
+  // 이 호출이 실패해도 생애기록 저장(아래)에는 영향 없도록 분리된 try.
+  try {
+    await saveKokoBrainState(currentFamilyId, data);
+  } catch (e) {
+    console.error('Koko Brain 상태 저장 중 오류:', e);
+  }
 
   // 1) lifeArchives/{familyId} — 카테고리별 누적 + 중복 제거
   const ref = fbDb.collection('lifeArchives').doc(currentFamilyId);
@@ -2942,15 +3139,28 @@ ${transcript}
   }
 
   // 3) memoryTags — 키워드 빈도 누적 (병렬 처리로 Firestore 왕복 횟수를 줄임)
+  // tags는 이제 [{tag, importance}] 형태. 혹시 AI가 예전 형식(순수 문자열)으로
+  // 응답해도 깨지지 않도록 둘 다 처리함(하위호환).
   if (Array.isArray(data.tags)) {
-    await Promise.all(data.tags.map(async (tag) => {
-      const t = String(tag || '').trim();
+    await Promise.all(data.tags.map(async (item) => {
+      const t = String((item && item.tag) || item || '').trim();
       if (!t) return;
+      const importance = Math.min(5, Math.max(1, Number(item && item.importance) || 3));
       const id = currentFamilyId + '_' + normLife(t).replace(/[^\w가-힣]/g, '');
       const tref = fbDb.collection('memoryTags').doc(id);
       const tsnap = await tref.get();
       const count = tsnap.exists ? (tsnap.data().count || 0) + 1 : 1;
-      await tref.set({ familyId: currentFamilyId, tag: t, count, updatedAt: now }, { merge: true });
+      // importance는 매번 덮어쓰지 않고 더 높은 값으로만 갱신 — 한 번 중요하다고
+      // 판단된 기억이 다른 통화의 사소한 언급 때문에 격하되지 않도록 함.
+      const prevImportance = tsnap.exists ? (tsnap.data().importance || 0) : 0;
+      await tref.set({
+        familyId: currentFamilyId,
+        tag: t,
+        count,
+        importance: Math.max(prevImportance, importance),
+        lastMentionedAt: now,
+        updatedAt: now
+      }, { merge: true });
     }));
   }
 }
@@ -3066,7 +3276,7 @@ async function loadLifeArchiveData() {
 // Cloud Function 프록시 URL — firebase deploy 완료 후 출력된 함수 URL
 const GEMINI_PROXY_URL = 'https://asia-northeast3-koko-ring.cloudfunctions.net/callGemini';
 
-async function callGemini(messages, maxTokens = 800) {
+async function callGemini(messages, maxTokens = 800, includeKokoBrain = false) {
   const contents = messages
     .filter(m => m.content)
     .map(m => ({
@@ -3086,6 +3296,12 @@ async function callGemini(messages, maxTokens = 800) {
   }
   if (elderName) honorific += `\n어르신 성함은 "${elderName}"님입니다. 필요할 때 성함을 불러드려도 좋아요.`;
 
+  // Koko Brain 콘텍스트(인터뷰 진행도, 다음 오프닝, 관련 기억, 건강 관찰)는
+  // 실제 어르신과의 대화 생성 호출에만 추가함. 통화 종료 후 JSON 분석을 위한
+  // callGemini 호출(extractAndSaveLifeArchive 등)에는 절대 끼워 넣지 않음 —
+  // 거기 섞이면 "순수 JSON만 출력하라"는 지시와 충돌해 파싱이 깨질 수 있음.
+  const kokoBrainAddon = includeKokoBrain ? buildKokoBrainPromptAddon(kokoBrainCtx) : '';
+
   // 키는 더 이상 여기 없음 — Cloud Function이 서버 환경변수에 보관된 키로 대신 호출함.
   if (!currentUser) throw new Error('로그인이 필요합니다.');
   const idToken = await currentUser.getIdToken();
@@ -3099,7 +3315,7 @@ async function callGemini(messages, maxTokens = 800) {
         'Authorization': 'Bearer ' + idToken,
       },
       body: JSON.stringify({
-        systemInstruction: SYSTEM + honorific,
+        systemInstruction: SYSTEM + honorific + kokoBrainAddon,
         contents,
         maxOutputTokens: maxTokens,
       }),
