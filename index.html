@@ -394,8 +394,6 @@
   .tab-item.active .tab-label { color: var(--green); }
 
   /* ── 모달 ── */
-  #api-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
-  #api-modal.show { display: flex; }
   #other-family-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
   #other-family-modal.show { display: flex; }
   #facility-code-modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.5); z-index: 200; align-items: center; justify-content: center; padding: 24px; }
@@ -1002,17 +1000,6 @@
 </div>
 <style>#plan-modal.show { display:flex !important; }</style>
 
-<!-- Gemini API 키 설정 모달 -->
-<div id="api-modal">
-  <div class="modal-box">
-    <div class="modal-title">🔗 AI 연결 설정</div>
-    <div class="modal-desc">코코가 실제로 대화하려면 Gemini API 키가 필요해요. 무료로 발급받을 수 있어요.</div>
-    <input class="modal-input" id="proxy-input" type="text" placeholder="API 키 붙여넣기" />
-    <a class="modal-link" href="https://aistudio.google.com/apikey" target="_blank">🔗 Gemini API 키 무료로 발급받기</a>
-    <button class="btn-big" onclick="saveProxy()" style="margin-bottom:0;">저장하고 시작</button>
-  </div>
-</div>
-
 <!-- 다른 가족(어르신) 코드로 합류하는 모달 -->
 <div id="other-family-modal">
   <div class="modal-box">
@@ -1053,34 +1040,18 @@
 <script>
 // ── 전역 상태 ───────────────────────────────────────────────
 // ════════════════════════════════════════════════════════════
-//  ⬇️⬇️⬇️  여기에 Gemini API 키를 넣으세요! (최대 여러 개)  ⬇️⬇️⬇️
-//  키를 여러 개 넣으면 번갈아 사용해서 동시 사용자를 늘릴 수 있어요.
-//  각 키를 따옴표로 감싸고 쉼표로 구분하세요.
-//  예) const MY_API_KEYS = ["AQ.키1", "AQ.키2", "AQ.키3"];
-const MY_API_KEYS = [
-  "AQ.Ab8RN6KX5glgdQ3OYls4gPF9YF6ddqvRfAP08vX-KE21f-LM9Q",
-  "AQ.Ab8RN6LA2trRN6HeFJRbYbb59ghNre9SfusKRCJZPyp2Gz_Tvw",
-  "AQ.Ab8RN6LLoVBxV0IuoYltB2B2vgQuBC0aPo4ALArvRi5u7zUaQg",
-].filter(k => k && k.length > 10);  // 빈 칸은 자동 제외
+//  Gemini API 키는 더 이상 여기 두지 않습니다.
+//  키는 Cloud Function(서버) 환경변수에만 보관되고, 이 화면은
+//  로그인 토큰만 들고 그 함수를 호출합니다.
 // ════════════════════════════════════════════════════════════
 
-let keyIndex = 0; // 키 로테이션용
-function getNextKey() {
-  if (GEMINI_KEY && MY_API_KEYS.length === 0) return GEMINI_KEY; // 수동 입력 키
-  if (MY_API_KEYS.length === 0) return GEMINI_KEY;
-  const key = MY_API_KEYS[keyIndex % MY_API_KEYS.length];
-  keyIndex++;
-  return key;
-}
-
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.2.0';
+const APP_VERSION = 'v6.2.1';
 const APP_VERSION_DATE = '2026-06-18';
 
 let userName = '';
 let userRole = '';            // 'elder' | 'child' (세션 중에만 유지)
 let isCreatingNewFamily = false; // elder-setup 화면이 "새 가족 생성" 의도로 열렸는지 표시
-let GEMINI_KEY = (MY_API_KEYS[0]) || '';
 let selectedRole = '';
 let history = [];
 let reportList = [];          // Firestore에서 로드
@@ -2083,20 +2054,10 @@ function goCallScreen() {
     alert('구독이 만료되어 통화를 이용할 수 없어요.\n대표 보호자가 구독을 갱신하면 다시 이용할 수 있어요.');
     return;
   }
-  if (!GEMINI_KEY) {
-    document.getElementById('proxy-input').value = '';
-    document.getElementById('api-modal').classList.add('show');
+  if (!currentUser) {
+    alert('로그인이 필요해요.');
     return;
   }
-  showScreen('elder-call');
-  startCall();
-}
-
-function saveProxy() {
-  const key = document.getElementById('proxy-input').value.trim();
-  if (!key || key.length < 20) { alert('API 키를 정확히 입력해주세요'); return; }
-  GEMINI_KEY = key;
-  document.getElementById('api-modal').classList.remove('show');
   showScreen('elder-call');
   startCall();
 }
@@ -2495,7 +2456,7 @@ async function startCall() {
   await new Promise(r => setTimeout(r, 600));
 
   let reply;
-  if (GEMINI_KEY) {
+  if (currentUser) {
     try {
       const trigger = '(통화 시작. 코코가 따뜻하게 첫 인사를 건넨다. 짧게 2문장 이내. 이모지 사용 금지.)';
       history = [{ role: 'user', content: trigger }];
@@ -2508,7 +2469,7 @@ async function startCall() {
       reply = '안녕하세요! 코코예요. 오늘 하루 어떻게 보내셨어요?';
     }
   } else {
-    // goCallScreen()이 API 키 없이는 통화 진입을 막으므로 이 분기는 정상 흐름에서 도달하지 않음
+    // goCallScreen()이 로그인 없이는 통화 진입을 막으므로 이 분기는 정상 흐름에서 도달하지 않음
     reply = '안녕하세요! 코코예요. 오늘 하루 어떻게 보내셨어요?';
   }
 
@@ -2530,7 +2491,7 @@ async function onElderSpeech(text) {
   setStatus('코코가 생각하고 있어요...');
 
   let reply;
-  if (GEMINI_KEY) {
+  if (currentUser) {
     turnCount++;
     history.push({ role: 'user', content: text });
 
@@ -2594,9 +2555,8 @@ async function onElderSpeech(text) {
       }
     }
   } else {
-    // 이 시점엔 API 키가 항상 있어야 정상(goCallScreen에서 미리 막음).
-    // 혹시라도 키가 비어버린 비상 상황이면, 가짜 대화로 흉내내지 않고 통화를 정직하게 끝냄.
-    console.error('GEMINI_KEY가 없는 상태로 통화가 진행됨');
+    // 이 시점엔 로그인 상태가 항상 있어야 정상(goCallScreen에서 미리 막음).
+    console.error('로그인 없이 통화가 진행됨');
     addTranscript('koko', '죄송해요, 지금 코코와 연결이 끊겼어요. 잠시 후 다시 전화해주세요.');
     document.getElementById('mic-btn').disabled = false;
     processing = false;
@@ -2745,7 +2705,7 @@ async function endCall() {
     .map(m => `${m.role === 'assistant' ? '코코' : '어르신'}: ${m.content}`)
     .join('\n');
 
-  if (GEMINI_KEY) {
+  if (currentUser) {
     const briefPrompt = `당신은 노인 돌봄 전문가입니다. 아래는 AI 코코와 어르신이 나눈 실제 통화 내용입니다. 이 대화를 꼼꼼히 분석해서 자녀에게 보낼 브리핑을 작성하세요.
 
 [실제 대화 내용]
@@ -3103,6 +3063,9 @@ async function loadLifeArchiveData() {
 }
 
 // ── Gemini API 호출 (여러 키 로테이션 + 자동 재시도) ──────────
+// Cloud Function 프록시 URL — firebase deploy 완료 후 출력된 함수 URL
+const GEMINI_PROXY_URL = 'https://asia-northeast3-koko-ring.cloudfunctions.net/callGemini';
+
 async function callGemini(messages, maxTokens = 800) {
   const contents = messages
     .filter(m => m.content)
@@ -3123,75 +3086,56 @@ async function callGemini(messages, maxTokens = 800) {
   }
   if (elderName) honorific += `\n어르신 성함은 "${elderName}"님입니다. 필요할 때 성함을 불러드려도 좋아요.`;
 
-  const url = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent';
-  const body = JSON.stringify({
-    system_instruction: { parts: [{ text: SYSTEM + honorific }] },
-    contents,
-    generationConfig: {
-      maxOutputTokens: maxTokens,
-      temperature: 0.9,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
-  });
+  // 키는 더 이상 여기 없음 — Cloud Function이 서버 환경변수에 보관된 키로 대신 호출함.
+  if (!currentUser) throw new Error('로그인이 필요합니다.');
+  const idToken = await currentUser.getIdToken();
 
-  // 사용 가능한 키 목록 (수동 입력 키 또는 박아넣은 키 배열)
-  const keys = MY_API_KEYS.length > 0 ? MY_API_KEYS : [GEMINI_KEY];
-  let lastErr = null;
-
-  // 키를 하나씩 돌려가며 시도 (한 키가 한도 초과면 다음 키로)
-  for (let i = 0; i < keys.length; i++) {
-    const key = getNextKey();
-    if (!key) continue;
-    try {
-      const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key },
-        body,
-      });
-      if (res.status === 429) {
-        // 이 키는 한도 초과 → 다음 키로 재시도
-        console.warn(`키 ${i+1} 한도 초과(429), 다음 키로 전환`);
-        lastErr = new Error('429');
-        continue;
-      }
-      if (!res.ok) {
-        const errText = await res.text();
-        console.error('Gemini API 오류:', res.status, errText);
-        lastErr = new Error(`Gemini Error: ${res.status}`);
-        continue;
-      }
-      const data = await res.json();
-
-      // Safety block 감지: finishReason이 SAFETY이거나 candidates가 없을 때
-      const candidate = data.candidates?.[0];
-      const finishReason = candidate?.finishReason;
-      if (!candidate || finishReason === 'SAFETY' || finishReason === 'RECITATION') {
-        // promptFeedback blockReason도 확인
-        const blockReason = data.promptFeedback?.blockReason;
-        console.warn('Gemini safety block:', finishReason || blockReason, data);
-        // safety block은 재시도해도 소용없으니 바로 fallback 반환
-        return '__SAFETY_BLOCKED__';
-      }
-
-      // Gemini 3 계열은 parts[0]이 빈 thought 파트일 수 있어서, 배열 전체를 순회해
-      // text가 있는 파트만 모아야 함(part.thought가 true인 파트는 제외).
-      const parts = candidate?.content?.parts || [];
-      const text = parts
-        .filter(p => p.text && !p.thought)
-        .map(p => p.text)
-        .join('')
-        .trim();
-      if (!text) {
-        // 텍스트가 비어있으면 재시도 (다음 키로)
-        lastErr = new Error('빈 응답');
-        continue;
-      }
-      return text;
-    } catch(e) {
-      lastErr = e;
-    }
+  let res;
+  try {
+    res = await fetch(GEMINI_PROXY_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + idToken,
+      },
+      body: JSON.stringify({
+        systemInstruction: SYSTEM + honorific,
+        contents,
+        maxOutputTokens: maxTokens,
+      }),
+    });
+  } catch (e) {
+    console.error('Cloud Function 호출 자체가 실패(네트워크 등):', e);
+    throw new Error('서버 연결 실패');
   }
-  throw lastErr || new Error('모든 키 사용 실패');
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error('Gemini 프록시 오류:', res.status, errText);
+    throw new Error(`Gemini Error: ${res.status}`);
+  }
+
+  const data = await res.json();
+
+  // Safety block 감지: finishReason이 SAFETY이거나 candidates가 없을 때
+  const candidate = data.candidates?.[0];
+  const finishReason = candidate?.finishReason;
+  if (!candidate || finishReason === 'SAFETY' || finishReason === 'RECITATION') {
+    const blockReason = data.promptFeedback?.blockReason;
+    console.warn('Gemini safety block:', finishReason || blockReason, data);
+    return '__SAFETY_BLOCKED__';
+  }
+
+  // Gemini 3 계열은 parts[0]이 빈 thought 파트일 수 있어서, 배열 전체를 순회해
+  // text가 있는 파트만 모아야 함(part.thought가 true인 파트는 제외).
+  const parts = candidate?.content?.parts || [];
+  const text = parts
+    .filter(p => p.text && !p.thought)
+    .map(p => p.text)
+    .join('')
+    .trim();
+  if (!text) throw new Error('빈 응답');
+  return text;
 }
 
 // ── 자녀 화면 ───────────────────────────────────────────────
