@@ -114,6 +114,49 @@
   .pending-desc { font-size: 14px; color: var(--gray); max-width: 360px; line-height: 1.6; }
 
   .hidden { display: none !important; }
+
+  /* ── 반응형: 태블릿 (900px 이하) ── */
+  @media (max-width: 900px) {
+    .sidebar { width: 180px; padding: 20px 12px; }
+    .main { padding: 24px 20px; }
+    .summary-row { flex-wrap: wrap; }
+    .summary-card { min-width: 140px; }
+  }
+
+  /* ── 반응형: 모바일 (640px 이하) ── */
+  @media (max-width: 640px) {
+    #app { flex-direction: column; }
+    .sidebar {
+      width: 100%;
+      padding: 14px 16px;
+      flex-direction: row;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 10px 14px;
+    }
+    .sidebar-logo { font-size: 16px; margin-bottom: 0; }
+    .sidebar-sub { display: none; } /* 작은 화면에서는 부제목 생략 */
+    .sidebar-facility { margin-bottom: 0; padding: 7px 10px; font-size: 12px; }
+    .sidebar-nav { flex-direction: row; flex: 0 0 100%; order: 3; gap: 6px; overflow-x: auto; }
+    .nav-item { padding: 8px 10px; font-size: 13px; white-space: nowrap; }
+    .sidebar-footer { margin-left: auto; padding: 6px 10px; }
+
+    .main { padding: 16px; max-width: 100%; }
+    .page-header { flex-direction: column; align-items: flex-start; gap: 10px; }
+    .page-title { font-size: 20px; }
+
+    .summary-row { flex-direction: column; gap: 10px; }
+    .summary-card { width: 100%; }
+
+    .filter-bar { flex-wrap: wrap; }
+    .search-input { width: 100%; margin-left: 0; }
+
+    /* 표는 화면보다 넓어질 수 있으니 가로 스크롤로 처리 (내용이 잘리지 않게) */
+    .table-wrap { overflow-x: auto; }
+    table { min-width: 640px; }
+
+    .modal-box { padding: 20px; max-width: 92vw; }
+  }
 </style>
 </head>
 <body>
