@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>코코링 케어 — 가입</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<style>
+  :root { --navy: #2A3F5F; --navy-text: #1E2F47; --gray: #8A93A0; --border: #E4E8EE; --bg: #F4F6F9; --danger: #D9534F; --danger-bg: #FCEAE9; }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--navy-text); min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }
+  .box { background: white; border-radius: 20px; padding: 36px; width: 100%; max-width: 420px; box-shadow: 0 8px 30px rgba(0,0,0,0.06); }
+  .logo { font-size: 20px; font-weight: 800; color: var(--navy); margin-bottom: 4px; }
+  .sub { font-size: 13px; color: var(--gray); margin-bottom: 24px; }
+  .mode-tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .mode-tab { flex: 1; text-align: center; padding: 10px; border-radius: 10px; font-size: 13px; font-weight: 700; cursor: pointer; background: #F0F2F5; color: var(--gray); }
+  .mode-tab.active { background: var(--navy); color: white; }
+  input { width: 100%; padding: 13px 14px; border-radius: 10px; border: 1px solid var(--border); font-size: 14px; margin-bottom: 10px; outline: none; }
+  input:focus { border-color: var(--navy); }
+  .btn { width: 100%; padding: 13px; border-radius: 10px; border: none; background: var(--navy); color: white; font-size: 14px; font-weight: 700; cursor: pointer; margin-top: 6px; }
+  .err { background: var(--danger-bg); color: var(--danger); font-size: 13px; padding: 10px 12px; border-radius: 8px; margin-bottom: 12px; display: none; }
+  .field-label { font-size: 12px; color: var(--gray); font-weight: 700; margin-bottom: 6px; margin-top: 14px; }
+  .field-label:first-child { margin-top: 0; }
+  .back-link { text-align: center; font-size: 13px; color: var(--gray); margin-top: 16px; cursor: pointer; }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+
+<div class="box">
+  <div class="logo">🐘 코코링 케어</div>
+  <div class="sub">요양 시설 관리자 / 직원 가입</div>
+
+  <div class="mode-tabs">
+    <div class="mode-tab active" id="tab-new-facility" onclick="switchMode('new')">신규 시설 등록</div>
+    <div class="mode-tab" id="tab-join-staff" onclick="switchMode('join')">기존 직원으로 합류</div>
+  </div>
+
+  <div class="err" id="err-box"></div>
+
+  <!-- 공통: 로그인 계정 정보 -->
+  <div class="field-label">이메일</div>
+  <input id="su-email" type="email" placeholder="이메일" />
+  <div class="field-label">비밀번호</div>
+  <input id="su-pw" type="password" placeholder="6자 이상" />
+  <div class="field-label">담당자 성함</div>
+  <input id="su-name" type="text" placeholder="이름" />
+
+  <!-- 신규 시설 등록 전용 필드 -->
+  <div id="fields-new-facility">
+    <div class="field-label">시설(요양원) 이름</div>
+    <input id="su-facility-name" type="text" placeholder="예: 행복요양원" />
+    <div class="field-label">시설 주소</div>
+    <input id="su-facility-address" type="text" placeholder="예: 서울시 강남구 ..." />
+  </div>
+
+  <!-- 기존 직원 합류 전용 필드 -->
+  <div id="fields-join-staff" class="hidden">
+    <div class="field-label">시설 코드</div>
+    <input id="su-facility-code" type="text" placeholder="관리자에게 받은 시설 코드" />
+  </div>
+
+  <button class="btn" onclick="doSignup()">가입 신청하기</button>
+  <div class="back-link" onclick="location.href='index.html'">이미 계정이 있으신가요? 로그인하기</div>
+</div>
+
+<script>
+  const firebaseConfig = {
+    apiKey: "AIzaSyCfdMxQx7NqYz5eyblUhR_nOVwxPUZNnYM",
+    authDomain: "koko-ring.firebaseapp.com",
+    projectId: "koko-ring",
+    storageBucket: "koko-ring.firebasestorage.app",
+    messagingSenderId: "656069841928",
+    appId: "1:656069841928:web:d48d48de8e11da09b26dbd",
+  };
+  firebase.initializeApp(firebaseConfig);
+  const fbAuth = firebase.auth();
+  const fbDb = firebase.firestore();
+
+  let mode = 'new'; // 'new' | 'join'
+
+  function switchMode(m) {
+    mode = m;
+    document.getElementById('tab-new-facility').classList.toggle('active', m === 'new');
+    document.getElementById('tab-join-staff').classList.toggle('active', m === 'join');
+    document.getElementById('fields-new-facility').classList.toggle('hidden', m !== 'new');
+    document.getElementById('fields-join-staff').classList.toggle('hidden', m !== 'join');
+  }
+
+  function showErr(msg) {
+    const box = document.getElementById('err-box');
+    box.textContent = msg;
+    box.style.display = 'block';
+  }
+
+  async function doSignup() {
+    const email = document.getElementById('su-email').value.trim();
+    const pw = document.getElementById('su-pw').value;
+    const name = document.getElementById('su-name').value.trim();
+    document.getElementById('err-box').style.display = 'none';
+
+    if (!email || !pw || !name) { showErr('이메일, 비밀번호, 이름을 모두 입력해주세요.'); return; }
+    if (pw.length < 6) { showErr('비밀번호는 6자 이상이어야 해요.'); return; }
+
+    if (mode === 'new') {
+      const facilityName = document.getElementById('su-facility-name').value.trim();
+      const facilityAddress = document.getElementById('su-facility-address').value.trim();
+      if (!facilityName) { showErr('시설 이름을 입력해주세요.'); return; }
+      await signupNewFacility(email, pw, name, facilityName, facilityAddress);
+    } else {
+      const facilityCode = document.getElementById('su-facility-code').value.trim().toUpperCase();
+      if (!facilityCode) { showErr('시설 코드를 입력해주세요.'); return; }
+      await signupJoinStaff(email, pw, name, facilityCode);
+    }
+  }
+
+  async function signupNewFacility(email, pw, name, facilityName, facilityAddress) {
+    try {
+      const cred = await fbAuth.createUserWithEmailAndPassword(email, pw);
+      const uid = cred.user.uid;
+
+      // 시설 코드(직원 초대용, facilityId와는 별개의 짧은 코드)를 생성
+      const facilityCode = genCode();
+
+      const facilityRef = fbDb.collection('facilities').doc();
+      await facilityRef.set({
+        name: facilityName,
+        address: facilityAddress,
+        facilityCode,
+        status: 'pending', // 운영자 승인 전까지는 대시보드 이용 불가
+        ownerUid: uid,
+        createdAt: Date.now(),
+      });
+
+      await fbDb.collection('facilityStaff').doc(facilityRef.id + '_' + uid).set({
+        facilityId: facilityRef.id,
+        uid, name, email,
+        role: 'admin',
+        status: 'pending', // 시설 자체가 승인돼야 의미있으므로 같이 pending
+        joinedAt: Date.now(),
+      });
+
+      window.location.href = 'index.html';
+    } catch (e) {
+      console.error('시설 등록 실패:', e);
+      showErr(authErrToKorean(e));
+    }
+  }
+
+  async function signupJoinStaff(email, pw, name, facilityCode) {
+    try {
+      // 시설 코드로 시설을 먼저 찾음
+      const facSnap = await fbDb.collection('facilities').where('facilityCode', '==', facilityCode).limit(1).get();
+      if (facSnap.empty) { showErr('시설 코드를 찾을 수 없어요. 관리자에게 코드를 다시 확인해주세요.'); return; }
+      const facilityId = facSnap.docs[0].id;
+
+      const cred = await fbAuth.createUserWithEmailAndPassword(email, pw);
+      const uid = cred.user.uid;
+
+      await fbDb.collection('facilityStaff').doc(facilityId + '_' + uid).set({
+        facilityId, uid, name, email,
+        role: 'staff',
+        status: 'pending', // 그 시설 관리자(admin)가 승인해야 이용 가능
+        joinedAt: Date.now(),
+      });
+
+      window.location.href = 'index.html';
+    } catch (e) {
+      console.error('직원 가입 실패:', e);
+      showErr(authErrToKorean(e));
+    }
+  }
+
+  function genCode() {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 6; i++) code += chars[Math.floor(Math.random() * chars.length)];
+    return code;
+  }
+
+  function authErrToKorean(e) {
+    if (e.code === 'auth/email-already-in-use') return '이미 가입된 이메일이에요. 로그인해주세요.';
+    if (e.code === 'auth/invalid-email') return '올바른 이메일 형식이 아니에요.';
+    if (e.code === 'auth/weak-password') return '비밀번호가 너무 약해요. 6자 이상으로 설정해주세요.';
+    return '가입 처리 중 문제가 생겼어요. 다시 시도해주세요.';
+  }
+</script>
+</body>
+</html>
