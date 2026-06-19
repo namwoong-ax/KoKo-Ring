@@ -2434,6 +2434,18 @@ function setStatus(text) {
   document.getElementById('call-status').textContent = text;
 }
 
+// ── 코코 응답 후처리 ─────────────────────────────────────────
+// Gemini가 자체적으로 (속으로 생각하며), (웃으며) 같은 괄호 지시를 붙이는 경우가 있음.
+// 어르신 화면에 표시되거나 TTS로 읽히면 어색하므로, 표시/발화 전에 모두 제거함.
+function stripParens(text) {
+  // 한국어 소괄호 (…), 대괄호 [통화종료] 제외한 나머지 [...]도 제거
+  // 단, [통화종료]는 통화 종료 감지에 쓰이므로 유지함
+  return (text || '')
+    .replace(/\([^)]*\)/g, '')   // (…) 형태 전부 제거
+    .replace(/\s{2,}/g, ' ')     // 연속 공백 정리
+    .trim();
+}
+
 // ── 대화 자막 누적 표시 ──────────────────────────────────────
 function addTranscript(role, text) {
   const area = document.getElementById('transcript-area');
@@ -2512,8 +2524,9 @@ async function startCall() {
     reply = '안녕하세요! 코코예요. 오늘 하루 어떻게 보내셨어요?';
   }
 
-  addTranscript('koko', reply);
-  await speak(reply);  // speak 끝나면 자동으로 듣기 시작됨
+  const displayReply = stripParens(reply);
+  addTranscript('koko', displayReply);
+  await speak(displayReply);  // speak 끝나면 자동으로 듣기 시작됨
 }
 
 async function onElderSpeech(text) {
@@ -2609,7 +2622,7 @@ async function onElderSpeech(text) {
 
   // 코코가 통화 종료 신호를 보냈는지 확인
   const wantsToEnd = reply.includes('[통화종료]');
-  const cleanReply = reply.replace('[통화종료]', '').trim();
+  const cleanReply = stripParens(reply.replace('[통화종료]', '').trim());
 
   document.getElementById('mic-btn').disabled = false;
   addTranscript('koko', cleanReply);
