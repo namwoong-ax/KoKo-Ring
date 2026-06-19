@@ -431,7 +431,12 @@
       <input class="name-input" id="auth-email" type="email" inputmode="email" placeholder="example@email.com" autocomplete="username" style="margin-bottom:16px;" />
 
       <div class="field-label">비밀번호</div>
-      <input class="name-input" id="auth-pw" type="password" placeholder="6자 이상" autocomplete="current-password" />
+      <input class="name-input" id="auth-pw" type="password" placeholder="6자 이상" autocomplete="current-password" style="margin-bottom:16px;" />
+
+      <div id="auth-pw-confirm-wrap" style="display:none;">
+        <div class="field-label">비밀번호 확인</div>
+        <input class="name-input" id="auth-pw-confirm" type="password" placeholder="비밀번호를 한 번 더 입력해주세요" autocomplete="new-password" />
+      </div>
       <div id="auth-error" style="color:#D9534F; font-size:13px; margin-top:8px; display:none;"></div>
     </div>
 
@@ -449,6 +454,32 @@
       <span onclick="toggleAuthMode()" style="color:var(--green); font-weight:700; cursor:pointer; margin-left:4px;" id="auth-toggle-link">회원가입</span>
     </div>
     <div style="font-size:11px; color:#ccc; margin-top:10px;" id="app-version-text">v5.0 · 가족 연결</div>
+  </div>
+
+  <!-- ⓪-1 이메일 인증 대기 화면 (하드 모드: 인증 전까지 앱 진입 차단) -->
+  <div id="verify-email-screen" class="screen">
+    <div class="login-emoji koko-img" style="width:110px;height:95px;"></div>
+    <div class="login-title">이메일 인증이 필요해요</div>
+    <div class="login-sub">
+      <span id="verify-email-text">example@email.com</span> 으로<br>
+      인증 메일을 보내드렸어요.
+    </div>
+
+    <div style="width:100%; margin-top:24px;">
+      <div class="koko-msg" style="margin-bottom:24px;">
+        <div class="koko-msg-avatar koko-img"></div>
+        <div class="koko-msg-text">메일함(스팸함도 확인!)에서 인증 링크를 눌러주시면 자동으로 다음 화면으로 넘어가요.</div>
+      </div>
+
+      <div id="verify-status-msg" style="color:var(--green); font-size:13px; text-align:center; margin-bottom:12px; min-height:18px;"></div>
+
+      <button class="btn-big" id="verify-check-btn" onclick="checkEmailVerifiedNow(true)">인증 완료했어요 — 확인하기</button>
+      <button class="btn-social" id="verify-resend-btn" onclick="resendVerificationEmail()" style="margin-top:10px;">인증 메일 다시 보내기</button>
+
+      <div style="font-size:14px; color:var(--gray); margin-top:18px; text-align:center;">
+        <span onclick="logoutFromVerifyScreen()" style="color:var(--green); font-weight:700; cursor:pointer;">다른 계정으로 로그인</span>
+      </div>
+    </div>
   </div>
 
   <!-- ① 역할 선택 (로그인 후) -->
@@ -557,10 +588,12 @@
 
       <div class="ios-card">
         <div class="field-label">어르신 성함</div>
-        <input class="name-input" id="es-name" placeholder="예) 조남웅" style="margin-bottom:18px;" />
+        <input class="name-input" id="es-name" placeholder="예) 조남웅" maxlength="20" style="margin-bottom:18px;" />
+        <div id="es-name-error" style="color:#D9534F; font-size:13px; margin:-12px 0 14px;"></div>
 
         <div class="field-label">나이</div>
-        <input class="name-input" id="es-age" type="number" inputmode="numeric" placeholder="예) 78" style="margin-bottom:18px;" />
+        <input class="name-input" id="es-age" type="number" inputmode="numeric" min="1" max="130" placeholder="예) 78" style="margin-bottom:18px;" />
+        <div id="es-age-error" style="color:#D9534F; font-size:13px; margin:-12px 0 14px;"></div>
 
         <div class="field-label">성별</div>
         <div class="role-grid" id="es-sex-grid" style="margin-bottom:18px;">
@@ -1053,7 +1086,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.4.0';
+const APP_VERSION = 'v6.6.0';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -1186,11 +1219,24 @@ window.addEventListener('load', () => {
   fbAuth.onAuthStateChanged(async (user) => {
     if (user) {
       currentUser = user;
+
+      // 하드 모드 이메일 인증 게이트 — 이메일/비밀번호 계정만 대상(구글 등 소셜 계정은 이미 인증된 이메일이라 제외)
+      const isPasswordAccount = user.providerData.some(p => p.providerId === 'password');
+      if (isPasswordAccount && !user.emailVerified) {
+        hideLoading();
+        document.getElementById('verify-email-text').textContent = user.email || '';
+        showScreen('verify-email-screen');
+        startVerifyPolling();
+        return;
+      }
+      stopVerifyPolling();
+
       await ensureUserDoc(user);   // users 컬렉션 자동 생성/갱신
       await loadUserContext();     // 가족 소속 확인 + 데이터 로드
       hideLoading();
       routeAfterLogin();
     } else {
+      stopVerifyPolling();
       currentUser = null;
       elderProfile = null;
       reportList = [];
@@ -1232,6 +1278,71 @@ function routeAfterLogin() {
       showScreen('family-choice');  // 가족 만들기 or 참여
     }
   }
+}
+
+// ── 이메일 인증 (하드 모드) ──────────────────────────────────
+let verifyPollIntervalId = null;
+let lastVerifyEmailSentAt = 0;
+
+// 인증 대기 화면에 머무는 동안 4초마다 자동으로 인증 여부를 확인.
+// 사용자가 메일함에서 링크를 누르고 다시 앱으로 돌아오면, 새로고침 없이도 자동 진입됨.
+function startVerifyPolling() {
+  stopVerifyPolling();
+  verifyPollIntervalId = setInterval(() => checkEmailVerifiedNow(false), 4000);
+}
+function stopVerifyPolling() {
+  if (verifyPollIntervalId) { clearInterval(verifyPollIntervalId); verifyPollIntervalId = null; }
+}
+
+function showVerifyMsg(msg) {
+  const el = document.getElementById('verify-status-msg');
+  if (el) el.textContent = msg || '';
+}
+
+async function checkEmailVerifiedNow(isManual) {
+  if (!currentUser) return;
+  try {
+    await currentUser.reload();
+    // reload() 후 fbAuth.currentUser가 최신 상태를 가짐 — currentUser 참조 갱신
+    currentUser = fbAuth.currentUser;
+    if (currentUser && currentUser.emailVerified) {
+      stopVerifyPolling();
+      showVerifyMsg('인증 완료! 잠시만요...');
+      await ensureUserDoc(currentUser);
+      await loadUserContext();
+      routeAfterLogin();
+    } else if (isManual) {
+      // 수동 버튼 클릭일 때만 안내 문구 표시 (자동 폴링 중엔 조용히 재시도)
+      showVerifyMsg('아직 인증이 확인되지 않았어요. 메일을 다시 확인해주세요.');
+    }
+  } catch (e) {
+    console.error('이메일 인증 확인 실패:', e);
+  }
+}
+
+async function resendVerificationEmail() {
+  if (!currentUser) return;
+  const now = Date.now();
+  if (now - lastVerifyEmailSentAt < 30000) {
+    showVerifyMsg('너무 빨리 재요청했어요. 30초 후 다시 시도해주세요.');
+    return;
+  }
+  const btn = document.getElementById('verify-resend-btn');
+  btn.disabled = true;
+  try {
+    await currentUser.sendEmailVerification();
+    lastVerifyEmailSentAt = Date.now();
+    showVerifyMsg('인증 메일을 다시 보냈어요. 받은편지함(스팸함 포함)을 확인해주세요.');
+  } catch (e) {
+    showVerifyMsg(firebaseErrorMsg(e));
+  } finally {
+    setTimeout(() => { btn.disabled = false; }, 30000);
+  }
+}
+
+function logoutFromVerifyScreen() {
+  stopVerifyPolling();
+  fbAuth.signOut();
 }
 
 // ── Firestore: users 컬렉션 자동 생성 ───────────────────────
@@ -1739,6 +1850,8 @@ function toggleAuthMode() {
   document.getElementById('auth-sub').textContent = isLogin ? 'Koko-Ring · 가족 계정으로 로그인' : 'Koko-Ring · 보호자 회원가입';
   document.getElementById('auth-toggle-text').textContent = isLogin ? '계정이 없으신가요?' : '이미 계정이 있으신가요?';
   document.getElementById('auth-toggle-link').textContent = isLogin ? '회원가입' : '로그인';
+  document.getElementById('auth-pw-confirm-wrap').style.display = isLogin ? 'none' : 'block';
+  document.getElementById('auth-pw-confirm').value = '';
   document.getElementById('auth-error').style.display = 'none';
 }
 
@@ -1749,18 +1862,26 @@ async function doAuth() {
   errEl.style.display = 'none';
 
   if (!email || !pw) { showAuthError('이메일과 비밀번호를 입력해주세요.'); return; }
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showAuthError('이메일 형식이 올바르지 않아요.'); return; }
   if (pw.length < 6) { showAuthError('비밀번호는 6자 이상이어야 해요.'); return; }
+  if (authMode === 'signup') {
+    const pwConfirm = document.getElementById('auth-pw-confirm').value;
+    if (pw !== pwConfirm) { showAuthError('비밀번호가 일치하지 않아요. 다시 확인해주세요.'); return; }
+  }
 
   const btn = document.getElementById('auth-btn');
   btn.disabled = true; btn.textContent = '잠시만요...';
   try {
     if (authMode === 'signup') {
-      await fbAuth.createUserWithEmailAndPassword(email, pw);
+      const cred = await fbAuth.createUserWithEmailAndPassword(email, pw);
+      try { await cred.user.sendEmailVerification(); lastVerifyEmailSentAt = Date.now(); }
+      catch (e) { console.error('인증 메일 발송 실패:', e); } // 가입 자체는 막지 않음 — 인증 대기 화면의 '다시 보내기'로 재시도 가능
     } else {
       await fbAuth.signInWithEmailAndPassword(email, pw);
     }
-    // 성공하면 onAuthStateChanged가 자동으로 화면 전환
+    // 성공하면 onAuthStateChanged가 자동으로 화면 전환 (미인증이면 verify-email-screen으로)
     document.getElementById('auth-pw').value = '';
+    document.getElementById('auth-pw-confirm').value = '';
   } catch (e) {
     showAuthError(firebaseErrorMsg(e));
   } finally {
@@ -1886,7 +2007,21 @@ function pickPlace(el) {
 function checkElderReady() {
   const name = document.getElementById('es-name').value.trim();
   const age = document.getElementById('es-age').value.trim();
-  let ok = name && age && esSex && esRel && esPlace;
+  const nameErrEl = document.getElementById('es-name-error');
+  const ageErrEl = document.getElementById('es-age-error');
+
+  let nameOk = true, ageOk = true;
+  if (name && name.length < 2) { nameErrEl.textContent = '이름은 2자 이상 입력해주세요.'; nameOk = false; }
+  else { nameErrEl.textContent = ''; }
+
+  if (age) {
+    const ageNum = Number(age);
+    if (!Number.isInteger(ageNum) || ageNum < 1 || ageNum > 130) {
+      ageErrEl.textContent = '나이는 1~130 사이로 입력해주세요.'; ageOk = false;
+    } else { ageErrEl.textContent = ''; }
+  }
+
+  let ok = name && age && esSex && esRel && esPlace && nameOk && ageOk;
   if (esPlace === 'facility') {
     ok = ok && document.getElementById('es-facility').value.trim();
   }
@@ -1912,6 +2047,14 @@ async function saveElderInfo() {
       // "새 가족 만들기"로 들어온 경우(또는 가족이 전혀 없는 경우) → 무조건 새 가족 생성
       // 만약 currentFamilyId가 남아있는 상태에서 새 가족을 만들려는 거라면,
       // 절대 기존 가족 데이터를 건드리지 않도록 먼저 비워준다.
+
+      // 실수로 같은 어르신을 또 등록하는 걸 방지 — 완전 차단이 아니라 확인만
+      const dup = myFamilies.find(f => f.elderName === name);
+      if (dup) {
+        const proceed = confirm(`이미 '${name}' 님으로 등록된 가족이 있어요.\n그래도 새로 만드시겠어요?`);
+        if (!proceed) { btn.disabled = false; btn.textContent = '등록하고 시작하기'; return; }
+      }
+
       if (isCreatingNewFamily) {
         currentFamilyId = null; currentFamilyCode = ''; currentMemberRole = '';
       }
