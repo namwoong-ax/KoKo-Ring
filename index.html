@@ -1097,7 +1097,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.8.0';
+const APP_VERSION = 'v6.8.1';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -2422,6 +2422,7 @@ async function sendAudioToSTT(blob) {
       const errText = await res.text();
       console.error('STT 오류:', errText);
       setStatus('음성 인식 실패 — 다시 말씀해주세요');
+      addTranscript('koko', `⚠️ [디버그] STT 응답 오류 (${res.status}) — ${errText}`);
     } else {
       const { transcript } = await res.json();
       const text = dedupeSpeech((transcript || '').trim());
@@ -2437,7 +2438,9 @@ async function sendAudioToSTT(blob) {
     }
   } catch (e) {
     console.error('STT 전송 오류:', e);
-    setStatus('네트워크 오류 — 다시 말씀해주세요');
+    const detail = `${(e && e.name) || 'Error'}: ${(e && e.message) || e}`;
+    setStatus('네트워크 오류 — ' + detail);
+    addTranscript('koko', `⚠️ [디버그] STT 호출 실패 — ${detail}`);
   }
   // 다음 청취 시작
   if (!callEnded && !processing && !kokoSpeaking && autoMode) {
