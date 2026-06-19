@@ -1097,7 +1097,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.8.3';
+const APP_VERSION = 'v6.9.0';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -2339,7 +2339,9 @@ function goCallScreen() {
 // Web Speech API 대비 어르신 발화(느린 속도, 뭉개짐, 사투리) 인식 정확도 향상
 let pendingSpeech = '';
 let silenceTimer = null;
-const SILENCE_MS = 2500;   // 이 시간만큼 조용하면 "말 끝났다"고 보고 코코가 응답
+const SILENCE_MS = 2500;   // 말을 시작한 "후" 이만큼 조용하면 "말 끝났다"고 보고 코코가 응답
+const NO_SPEECH_TIMEOUT_MS = 8000; // 듣기 시작 후 이 시간 안에 아예 말을 시작 안 하면 포기하고 넘어감
+let hasDetectedSpeech = false; // 이번 듣기 턴에서 실제 목소리가 한 번이라도 감지됐는지
 
 const STT_PROXY_URL = 'https://transcribe-audio-656069841928.asia-northeast3.run.app';
 
@@ -2494,9 +2496,12 @@ function startListening(continuing) {
     isRecording = true;
     setListening(true);
 
-    // 침묵 감지: SILENCE_MS 후 자동으로 flush
+    // 아직 말을 시작하기 전이므로, 짧은 SILENCE_MS가 아니라 더 넉넉한
+    // NO_SPEECH_TIMEOUT_MS를 기다림. 실제 목소리가 감지되면(startVadLoop 안에서)
+    // 그때부터 SILENCE_MS짜리 타이머로 바뀜 — 즉 "말하다가 조용해지면" 끊김.
+    hasDetectedSpeech = false;
     if (silenceTimer) clearTimeout(silenceTimer);
-    silenceTimer = setTimeout(flushSpeech, SILENCE_MS);
+    silenceTimer = setTimeout(flushSpeech, NO_SPEECH_TIMEOUT_MS);
   } catch(e) {
     console.error('MediaRecorder 시작 실패:', e);
     isListening = false;
@@ -2555,6 +2560,16 @@ function startVadLoop() {
       } else {
         loudFrames = Math.max(0, loudFrames - 1);
       }
+    } else if (isRecording) {
+      // 어르신 말을 듣는 중 — 실제 목소리가 들리면 그 순간부터 SILENCE_MS짜리
+      // 짧은 타이머로 바꿔서, "말하다가 멈췄을 때"만 끊기게 함.
+      // (처음부터 짧은 타이머였으면 대답을 망설이는 사이에 끊겨버리는 문제가 있었음)
+      if (avg > SPEECH_DETECT_THRESHOLD) {
+        if (!hasDetectedSpeech) hasDetectedSpeech = true;
+        if (silenceTimer) clearTimeout(silenceTimer);
+        silenceTimer = setTimeout(flushSpeech, SILENCE_MS);
+      }
+      loudFrames = 0;
     } else {
       loudFrames = 0;
     }
@@ -2564,6 +2579,7 @@ function startVadLoop() {
 }
 
 const BARGE_THRESHOLD = 28; // 음량 임계값 (낮을수록 민감, 환경에 따라 조정)
+const SPEECH_DETECT_THRESHOLD = 20; // 어르신 발화 감지 임계값 — barge보다 살짝 더 민감하게
 
 // 코코 말 중간에 어르신이 끼어들었을 때
 function interruptKoko() {
