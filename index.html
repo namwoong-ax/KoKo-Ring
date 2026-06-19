@@ -449,6 +449,14 @@
       <span>구글로 계속하기</span>
     </button>
 
+    <button class="btn-social" onclick="loginWithKakao()" style="background:#FEE500; border-color:#FEE500; color:#191919;">
+      <span>카카오로 계속하기</span>
+    </button>
+
+    <button class="btn-social" onclick="loginWithNaver()" style="background:#03C75A; border-color:#03C75A; color:#fff;">
+      <span>네이버로 계속하기</span>
+    </button>
+
     <div style="font-size:14px; color:var(--gray); margin-top:18px;">
       <span id="auth-toggle-text">계정이 없으신가요?</span>
       <span onclick="toggleAuthMode()" style="color:var(--green); font-weight:700; cursor:pointer; margin-left:4px;" id="auth-toggle-link">회원가입</span>
@@ -1086,7 +1094,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.6.0';
+const APP_VERSION = 'v6.7.0';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -1214,6 +1222,9 @@ window.addEventListener('load', () => {
     return;
   }
 
+  // 카카오/네이버 동의화면에서 돌아온 경우 처리 (일반 진입이면 내부에서 바로 리턴됨)
+  handleSocialLoginRedirect();
+
   // 로그인 상태 자동 감지 — onAuthStateChanged는 로컬 캐시를 먼저 확인하므로
   // 새로고침 시에도 즉시(~50ms) 호출됨. 그 전까지 로딩 화면 유지.
   fbAuth.onAuthStateChanged(async (user) => {
@@ -1270,7 +1281,13 @@ function routeAfterLogin() {
     showScreen('login-screen');   // 역할 선택
   } else {
     // 초대 링크(?join=코드)로 들어온 경우 → 코드 미리 채우고 참여 화면
-    const joinCode = new URLSearchParams(location.search).get('join');
+    // 소셜 로그인은 카카오/네이버를 거쳐오면서 원래 URL의 ?join= 파라미터가 사라지므로,
+    // 로그인 시도 직전에 sessionStorage에 백업해둔 값도 같이 확인함.
+    let joinCode = new URLSearchParams(location.search).get('join');
+    if (!joinCode) {
+      try { joinCode = sessionStorage.getItem('kokoring_pending_join'); } catch (e) {}
+    }
+    try { sessionStorage.removeItem('kokoring_pending_join'); } catch (e) {}
     if (joinCode) {
       document.getElementById('join-code').value = joinCode;
       showScreen('family-join');
@@ -1909,6 +1926,103 @@ async function loginWithGoogle() {
       try { await fbAuth.signInWithRedirect(provider); return; } catch (e2) { showAuthError(firebaseErrorMsg(e2)); return; }
     }
     showAuthError(firebaseErrorMsg(e));
+  }
+}
+
+// ── 카카오/네이버 로그인 ─────────────────────────────────────
+// REST API 키 / Client ID는 비밀이 아님(OAuth 표준상 브라우저 URL에 그대로 노출되는 값) — 클라이언트에 둬도 안전.
+const KAKAO_REST_API_KEY = '645a271056b453d14318959a6a55e93a';
+const NAVER_CLIENT_ID = '여기에_네이버_CLIENT_ID_입력'; // TODO: 네이버 개발자센터 내 애플리케이션 개요에서 확인해서 채워주세요
+const OAUTH_REDIRECT_URI = 'https://namwoong-ax.github.io/KoKo-Ring/';
+const KAKAO_LOGIN_FUNCTION_URL = 'https://kakao-login-656069841928.asia-northeast3.run.app';
+const NAVER_LOGIN_FUNCTION_URL = 'https://naver-login-656069841928.asia-northeast3.run.app';
+
+function genOAuthState() {
+  const arr = new Uint8Array(16);
+  crypto.getRandomValues(arr);
+  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+}
+
+function loginWithKakao() {
+  const state = genOAuthState();
+  try {
+    sessionStorage.setItem('kokoring_oauth_state', state);
+    sessionStorage.setItem('kokoring_oauth_provider', 'kakao');
+    const joinCode = new URLSearchParams(location.search).get('join');
+    if (joinCode) sessionStorage.setItem('kokoring_pending_join', joinCode);
+  } catch (e) {}
+  const url = new URL('https://kauth.kakao.com/oauth/authorize');
+  url.searchParams.set('client_id', KAKAO_REST_API_KEY);
+  url.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('state', state);
+  location.href = url.toString();
+}
+
+function loginWithNaver() {
+  const state = genOAuthState();
+  try {
+    sessionStorage.setItem('kokoring_oauth_state', state);
+    sessionStorage.setItem('kokoring_oauth_provider', 'naver');
+    const joinCode = new URLSearchParams(location.search).get('join');
+    if (joinCode) sessionStorage.setItem('kokoring_pending_join', joinCode);
+  } catch (e) {}
+  const url = new URL('https://nid.naver.com/oauth2.0/authorize');
+  url.searchParams.set('client_id', NAVER_CLIENT_ID);
+  url.searchParams.set('redirect_uri', OAUTH_REDIRECT_URI);
+  url.searchParams.set('response_type', 'code');
+  url.searchParams.set('state', state);
+  location.href = url.toString();
+}
+
+// 카카오/네이버 동의화면에서 돌아왔을 때(?code=...&state=...) 처리.
+// 페이지 로드 시 한 번 호출됨 — 일반 진입이면 code가 없어서 그냥 조용히 리턴.
+async function handleSocialLoginRedirect() {
+  const params = new URLSearchParams(location.search);
+  const code = params.get('code');
+  const state = params.get('state');
+  if (!code || !state) return;
+
+  let savedState = null, provider = null;
+  try {
+    savedState = sessionStorage.getItem('kokoring_oauth_state');
+    provider = sessionStorage.getItem('kokoring_oauth_provider');
+  } catch (e) {}
+
+  // 성공하든 실패하든 같은 code로 재시도되지 않게 URL을 바로 정리
+  history.replaceState({}, '', location.pathname);
+
+  if (!provider || state !== savedState) {
+    showScreen('auth-screen');
+    showAuthError('로그인 시도가 만료되었어요. 다시 시도해주세요.');
+    return;
+  }
+  try {
+    sessionStorage.removeItem('kokoring_oauth_state');
+    sessionStorage.removeItem('kokoring_oauth_provider');
+  } catch (e) {}
+
+  showScreen('auth-screen');
+  try {
+    const functionUrl = provider === 'kakao' ? KAKAO_LOGIN_FUNCTION_URL : NAVER_LOGIN_FUNCTION_URL;
+    const body = provider === 'kakao'
+      ? { code, redirectUri: OAUTH_REDIRECT_URI }
+      : { code, state };
+    const res = await fetch(functionUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      showAuthError(data.error || '로그인에 실패했어요.');
+      return;
+    }
+    await fbAuth.signInWithCustomToken(data.customToken);
+    // 성공하면 onAuthStateChanged가 자동으로 화면 전환
+  } catch (e) {
+    console.error('소셜 로그인 처리 실패:', e);
+    showAuthError('로그인 처리 중 문제가 발생했어요. 다시 시도해주세요.');
   }
 }
 
