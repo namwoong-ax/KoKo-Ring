@@ -1097,7 +1097,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.8.2';
+const APP_VERSION = 'v6.8.3';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -2434,6 +2434,8 @@ async function sendAudioToSTT(blob) {
           onElderSpeech(finalText);
           return;
         }
+      } else {
+        addTranscript('koko', `⚠️ [디버그] 인식된 텍스트가 비어있음 (원본 응답: "${transcript}", blob 크기: ${blob.size} bytes)`);
       }
     }
   } catch (e) {
