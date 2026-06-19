@@ -1097,7 +1097,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.9.0';
+const APP_VERSION = 'v6.9.1';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -2645,6 +2645,27 @@ function setListening(on) {
 }
 
 // ── 음성 합성 (TTS) ─────────────────────────────────────────
+// 응답 생성을 기다리는 동안 어색한 침묵을 메우는 짧은 추임새.
+// 진짜 speak()와 달리 끝나도 "이제 말씀하세요" 같은 턴 전환을 하지 않음 —
+// 그냥 잠깐 말소리를 채워서 "전화가 끊긴 듯한" 느낌을 줄여주는 용도.
+function speakFiller() {
+  if (!soundOn) return;
+  try {
+    window.speechSynthesis.cancel();
+    const fillers = ['음...', '아, 네...', '그러셨군요, 잠시만요...'];
+    const text = fillers[Math.floor(Math.random() * fillers.length)];
+    const utter = new SpeechSynthesisUtterance(text);
+    utter.lang = 'ko-KR';
+    utter.rate = 0.95;
+    utter.pitch = 1.05;
+    utter.volume = kokoVolume;
+    const voices = window.speechSynthesis.getVoices();
+    const koVoice = voices.find(v => v.lang === 'ko-KR');
+    if (koVoice) utter.voice = koVoice;
+    window.speechSynthesis.speak(utter);
+  } catch (e) {}
+}
+
 function speak(text) {
   return new Promise((resolve) => {
     // 코코가 말하기 시작 → 마이크 인식기는 중단 (코코 목소리 받아쓰지 않게)
@@ -2854,6 +2875,7 @@ async function onElderSpeech(text) {
 
   document.getElementById('mic-btn').disabled = true;
   setStatus('코코가 생각하고 있어요...');
+  speakFiller(); // AI 응답 기다리는 동안 어색한 침묵 메우기
 
   let reply;
   if (currentUser) {
