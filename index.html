@@ -261,6 +261,21 @@
   .ios-card { background: white; border-radius: 20px; padding: 18px; margin-bottom: 14px; box-shadow: 0 1px 3px rgba(16,24,40,0.04), 0 8px 24px rgba(16,24,40,0.04); }
   .ios-card.warn-border { border: 1.5px solid #F0C36D; }
 
+  /* ── 오늘의 퀴즈 (통화 중 카드형 오버레이) ───────────────────── */
+  .quiz-overlay { position: fixed; inset: 0; background: rgba(16,24,40,0.55); display: none; align-items: center; justify-content: center; z-index: 500; padding: 24px 20px; }
+  .quiz-overlay.show { display: flex; }
+  .quiz-card { background: white; border-radius: 26px; padding: 26px 22px; width: 100%; max-width: 420px; max-height: 88vh; overflow-y: auto; box-shadow: 0 20px 60px rgba(0,0,0,0.3); }
+  .quiz-label { font-size: 13px; color: var(--green); font-weight: 800; text-align: center; margin-bottom: 14px; letter-spacing: 0.3px; }
+  .quiz-image { width: 100%; height: 220px; border-radius: 20px; background: var(--green-light); margin-bottom: 20px; display: flex; align-items: center; justify-content: center; font-size: 84px; overflow: hidden; }
+  .quiz-image img { width: 100%; height: 100%; object-fit: cover; }
+  .quiz-question { font-size: 20px; font-weight: 800; color: #16243A; text-align: center; margin-bottom: 24px; line-height: 30px; }
+  .quiz-option { width: 100%; background: #F7F8FA; border: 2px solid var(--border); border-radius: 18px; padding: 20px 16px; font-size: 18px; font-weight: 700; color: #16243A; margin-bottom: 14px; cursor: pointer; transition: all .15s; text-align: center; }
+  .quiz-option:active { transform: scale(0.98); }
+  .quiz-option:last-child { margin-bottom: 0; }
+  .quiz-option.selected { background: var(--green-light); border-color: var(--green); color: var(--green-text); }
+  .quiz-option.disabled { pointer-events: none; opacity: 0.6; }
+  .quiz-option.disabled.selected { opacity: 1; }
+
   /* 어르신 프로필 카드 */
   .elder-profile { display: flex; align-items: center; gap: 14px; }
   .elder-initial { width: 52px; height: 52px; border-radius: 16px; background: var(--green-light); color: var(--green); font-size: 22px; font-weight: 800; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
@@ -751,6 +766,18 @@
   </div>
   <canvas id="photo-canvas" style="display:none;"></canvas>
 
+  <!-- 오늘의 퀴즈 (통화 중 카드형 오버레이, 2지선다) -->
+  <div class="quiz-overlay" id="quiz-overlay">
+    <div class="quiz-card">
+      <div class="quiz-label">📝 오늘의 퀴즈</div>
+      <div class="quiz-image" id="quiz-image">🧠</div>
+      <div class="quiz-question" id="quiz-question">질문이 여기 표시돼요</div>
+      <button class="quiz-option" id="quiz-option-1" onclick="selectQuizOption(1)"></button>
+      <button class="quiz-option" id="quiz-option-2" onclick="selectQuizOption(2)"></button>
+    </div>
+  </div>
+
+
   <!-- ⑤ 자녀 화면 -->
   <div id="child-screen" class="screen">
 
@@ -1097,7 +1124,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.9.1';
+const APP_VERSION = 'v6.11.0';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -3050,6 +3077,154 @@ function confirmPhoto() {
   if (photoResolve) { photoResolve(capturedPhoto); photoResolve = null; }
 }
 
+// ── 오늘의 퀴즈 (2지선다 카드형) ───────────────────────────────
+// 호출 예: showQuiz({
+//   question: '오늘 100에서 7을 빼면 얼마일까요?',
+//   options: ['93', '95'],
+//   correctIndex: 1,            // 1 또는 2 (정답이 몇 번째 보기인지)
+//   image: '🔢',                // 이모지 또는 실제 이미지 URL(http로 시작)
+//   onAnswer: (isCorrect, chosenIndex) => { ... }  // 선택 후 호출됨 (정답 맞았는지 등 전달)
+// });
+let currentQuiz = null;
+function showQuiz({ question, options, correctIndex, image, onAnswer }) {
+  currentQuiz = { question, options, correctIndex, onAnswer };
+  document.getElementById('quiz-question').textContent = question;
+
+  const imgEl = document.getElementById('quiz-image');
+  if (image && /^https?:\/\//.test(image)) {
+    imgEl.innerHTML = '';
+    const img = document.createElement('img');
+    img.src = image;
+    img.alt = '';
+    imgEl.appendChild(img);
+  } else {
+    imgEl.textContent = image || '🧠';
+  }
+
+  const opt1 = document.getElementById('quiz-option-1');
+  const opt2 = document.getElementById('quiz-option-2');
+  opt1.textContent = options[0];
+  opt2.textContent = options[1];
+  opt1.className = 'quiz-option';
+  opt2.className = 'quiz-option';
+
+  document.getElementById('quiz-overlay').classList.add('show');
+}
+
+function selectQuizOption(n) {
+  if (!currentQuiz) return;
+  const opt1 = document.getElementById('quiz-option-1');
+  const opt2 = document.getElementById('quiz-option-2');
+  const chosen = n === 1 ? opt1 : opt2;
+
+  // 정답/오답을 알려주지 않음 — 어르신이 "시험 보는 느낌"을 받지 않도록,
+  // 그냥 선택했다는 것만 중립적으로 표시하고 조용히 다음으로 넘어감.
+  chosen.classList.add('selected');
+  opt1.classList.add('disabled');
+  opt2.classList.add('disabled');
+
+  const isCorrect = n === currentQuiz.correctIndex;
+  const onAnswer = currentQuiz.onAnswer;
+  setTimeout(() => {
+    document.getElementById('quiz-overlay').classList.remove('show');
+    currentQuiz = null;
+    if (onAnswer) onAnswer(isCorrect, n);
+  }, 500);
+}
+
+function hideQuiz() {
+  document.getElementById('quiz-overlay').classList.remove('show');
+  currentQuiz = null;
+}
+
+// ── 오늘의 인지 체크 퀴즈 (5일 로테이션) ─────────────────────
+// MMSE 원리를 참고한 자체 간이 문항. 날짜 기준으로 5개 영역을 돌아가며 출제.
+// 참고: "기억력(단어 등록→회상)" 영역은 통화 앞부분에서 코코가 실제로 단어를
+// 제시해야 의미가 있어서, AI 통화 흐름 재구성 작업과 함께 나중에 연결할 예정.
+// 지금은 그 자리에 자체완결형(맥락 없이도 되는) 문항을 임시로 넣어둠.
+// 어르신껜 정답/오답을 알려주지 않고, 결과만 기록해뒀다가 추후 주간 리포트에 사용.
+let todaysQuizResult = null;
+
+function getTodaysQuiz() {
+  const now = new Date();
+  const day = now.getDate() % 5; // 날짜 기준 5일 로테이션 (0~4)
+  const month = now.getMonth() + 1;
+  const seasonOf = (m) => (m >= 3 && m <= 5) ? '봄' : (m >= 6 && m <= 8) ? '여름' : (m >= 9 && m <= 11) ? '가을' : '겨울';
+  const allSeasons = ['봄', '여름', '가을', '겨울'];
+  const realSeason = seasonOf(month);
+  const otherSeasons = allSeasons.filter(s => s !== realSeason);
+  const otherSeason = otherSeasons[Math.floor(Math.random() * otherSeasons.length)];
+  const seasonFirst = Math.random() < 0.5;
+
+  const hour = now.getHours();
+  const isDay = hour >= 6 && hour < 18;
+
+  const a = 90 + Math.floor(Math.random() * 9); // 90~98
+  const correctCalc = a - 7;
+  const wrongCalc = correctCalc + (Math.random() < 0.5 ? 2 : -2);
+  const calcFirst = Math.random() < 0.5;
+
+  const banks = [
+    { // 지남력(계절)
+      domain: '지남력',
+      question: '지금은 어떤 계절에 더 가까울까요?',
+      options: seasonFirst ? [realSeason, otherSeason] : [otherSeason, realSeason],
+      correctIndex: seasonFirst ? 1 : 2,
+      image: '🌤️',
+    },
+    { // 주의집중/계산
+      domain: '계산',
+      question: `${a}에서 7을 빼면 얼마일까요?`,
+      options: calcFirst ? [String(correctCalc), String(wrongCalc)] : [String(wrongCalc), String(correctCalc)],
+      correctIndex: calcFirst ? 1 : 2,
+      image: '🔢',
+    },
+    { // 언어(사물 인지) — 추후 단어 회상형으로 교체 예정
+      domain: '언어',
+      question: '손목에 차고 시간을 보는 물건이에요. 이게 뭘까요?',
+      options: ['시계', '안경'],
+      correctIndex: 1,
+      image: '⌚',
+    },
+    { // 시공간/판단력
+      domain: '시공간',
+      question: '보통 방에서 창문이랑 문 중에, 어느 쪽이 더 큰가요?',
+      options: ['창문', '문'],
+      correctIndex: 2,
+      image: '🚪',
+    },
+    { // 지남력(시간)
+      domain: '지남력',
+      question: '지금은 낮일까요, 밤일까요?',
+      options: isDay ? ['낮', '밤'] : ['밤', '낮'],
+      correctIndex: 1,
+      image: isDay ? '☀️' : '🌙',
+    },
+  ];
+  return banks[day];
+}
+
+function askDailyQuiz() {
+  return new Promise((resolve) => {
+    const quiz = getTodaysQuiz();
+    showQuiz({
+      question: quiz.question,
+      options: quiz.options,
+      correctIndex: quiz.correctIndex,
+      image: quiz.image,
+      onAnswer: (isCorrect, chosenIndex) => {
+        todaysQuizResult = {
+          domain: quiz.domain,
+          question: quiz.question,
+          chosen: quiz.options[chosenIndex - 1],
+          isCorrect,
+        };
+        resolve(todaysQuizResult);
+      },
+    });
+  });
+}
+
 function stopPhotoStream() {
   if (photoStream) {
     photoStream.getTracks().forEach(t => t.stop());
@@ -3083,6 +3258,10 @@ async function endCall() {
   }
 
   showScreen('elder-end');
+
+  // 오늘의 퀴즈 — 대화가 끝난 직후, 사진 찍기 전 타이밍에 진행
+  await askDailyQuiz();
+
   // 셀프 카메라 — 동의받고 촬영 (안 찍으면 null)
   const photoData = await askForPhoto();
 
