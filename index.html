@@ -1136,7 +1136,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.15.2';
+const APP_VERSION = 'v6.15.3';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -3216,13 +3216,15 @@ function buildQuizDomainBank() {
   ];
 
   // 화요일 — 계산 (5문항) — 숫자 문제, 이미지 없음
+  // 오답은 정답과 15~25 차이 — 누가 봐도 다른 수로 느껴지게, 계산을 실제로 해야만 구별 가능
   const used = new Set();
   const day1 = Array.from({ length: 5 }, () => {
     let a;
     do { a = 20 + Math.floor(Math.random() * 79); } while (used.has(a));
     used.add(a);
     const correct = a - 7;
-    const wrong = correct + (Math.random() < 0.5 ? 2 : -2);
+    const offset = 15 + Math.floor(Math.random() * 11); // 15~25 차이
+    const wrong = Math.random() < 0.5 ? correct + offset : Math.max(1, correct - offset);
     return Object.assign({ question: `${a}에서 7을 빼면 얼마일까요?`, image: null }, pair(String(correct), String(wrong)));
   });
 
