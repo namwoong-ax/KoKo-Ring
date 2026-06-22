@@ -778,7 +778,6 @@
   <!-- 오늘의 퀴즈 (통화 중 카드형 오버레이, 2지선다) -->
   <div class="quiz-overlay" id="quiz-overlay">
     <div class="quiz-card">
-      <div class="quiz-label">📝 오늘의 퀴즈</div>
       <div class="quiz-image" id="quiz-image">🧠</div>
       <div class="quiz-question" id="quiz-question">질문이 여기 표시돼요</div>
       <button class="quiz-option" id="quiz-option-1" onclick="selectQuizOption(1)"></button>
@@ -1137,7 +1136,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.15.0';
+const APP_VERSION = 'v6.15.2';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -3113,14 +3112,20 @@ function showQuiz({ question, options, correctIndex, image, onAnswer }) {
   document.getElementById('quiz-question').textContent = question;
 
   const imgEl = document.getElementById('quiz-image');
-  if (image && /^https?:\/\//.test(image)) {
+  if (!image) {
+    // 이미지가 없는 문항 (계산 등) — 이미지 영역 자체를 숨김
+    imgEl.style.display = 'none';
+  } else if (/^https?:\/\//.test(image)) {
+    imgEl.style.display = 'flex';
     imgEl.innerHTML = '';
     const img = document.createElement('img');
     img.src = image;
     img.alt = '';
     imgEl.appendChild(img);
   } else {
-    imgEl.textContent = image || '🧠';
+    // 이모지 또는 텍스트
+    imgEl.style.display = 'flex';
+    imgEl.textContent = image;
   }
 
   const opt1 = document.getElementById('quiz-option-1');
@@ -3196,21 +3201,21 @@ function buildQuizDomainBank() {
     return { options: first ? [correct, wrong] : [wrong, correct], correctIndex: first ? 1 : 2 };
   };
 
-  // 월요일 — 지남력 (5문항)
+  // 월요일 — 지남력 (5문항) — 텍스트로만 충분, 이미지 없음
   const day0 = [
-    Object.assign({ question: '지금은 어떤 계절에 더 가까울까요?', image: '🌤️' },
+    Object.assign({ question: '지금은 어떤 계절에 더 가까울까요?', image: null },
       pair(realSeason, otherSeasons[Math.floor(Math.random()*otherSeasons.length)])),
-    Object.assign({ question: '지금은 낮일까요, 밤일까요?', image: isDay ? '☀️' : '🌙' },
+    Object.assign({ question: '지금은 낮일까요, 밤일까요?', image: null },
       pair(isDay ? '낮' : '밤', isDay ? '밤' : '낮')),
-    Object.assign({ question: '지금은 오전일까요, 오후일까요?', image: '🕐' },
+    Object.assign({ question: '지금은 오전일까요, 오후일까요?', image: null },
       pair(hour < 12 ? '오전' : '오후', hour < 12 ? '오후' : '오전')),
-    Object.assign({ question: '오늘은 평일에 가까울까요, 주말에 가까울까요?', image: '📅' },
+    Object.assign({ question: '오늘은 평일에 가까울까요, 주말에 가까울까요?', image: null },
       pair(isWeekday ? '평일' : '주말', isWeekday ? '주말' : '평일')),
-    Object.assign({ question: '지금은 이번 달 초(1~15일)일까요, 말(16일 이후)일까요?', image: '🗓️' },
+    Object.assign({ question: '지금은 이번 달 초(1~15일)일까요, 말(16일 이후)일까요?', image: null },
       pair(isFirstHalf ? '초' : '말', isFirstHalf ? '말' : '초')),
   ];
 
-  // 화요일 — 계산 (5문항, 서로 다른 뺄셈)
+  // 화요일 — 계산 (5문항) — 숫자 문제, 이미지 없음
   const used = new Set();
   const day1 = Array.from({ length: 5 }, () => {
     let a;
@@ -3218,37 +3223,37 @@ function buildQuizDomainBank() {
     used.add(a);
     const correct = a - 7;
     const wrong = correct + (Math.random() < 0.5 ? 2 : -2);
-    return Object.assign({ question: `${a}에서 7을 빼면 얼마일까요?`, image: '🔢' }, pair(String(correct), String(wrong)));
+    return Object.assign({ question: `${a}에서 7을 빼면 얼마일까요?`, image: null }, pair(String(correct), String(wrong)));
   });
 
-  // 수요일 — 언어 (사물 인지, 5문항) — 추후 단어 회상형으로 교체 예정
+  // 수요일 — 언어 (사물 인지, 5문항) — 사물 이름 맞히기라 연관 이모지 표시
   const day2 = [
     Object.assign({ question: '손목에 차고 시간을 보는 물건이에요. 이게 뭘까요?', image: '⌚' }, pair('시계', '안경')),
-    Object.assign({ question: '비 올 때 쓰는 물건이에요. 이게 뭘까요?', image: '☔' }, pair('우산', '모자')),
-    Object.assign({ question: '음식을 자를 때 쓰는 물건이에요. 이게 뭘까요?', image: '🔪' }, pair('칼', '숟가락')),
-    Object.assign({ question: '추울 때 입는 옷이에요. 이게 뭘까요?', image: '🧥' }, pair('외투', '반팔')),
-    Object.assign({ question: '글씨를 쓸 때 쓰는 물건이에요. 이게 뭘까요?', image: '✏️' }, pair('연필', '빗')),
+    Object.assign({ question: '비 올 때 펼쳐서 쓰는 물건이에요. 이게 뭘까요?', image: '☔' }, pair('우산', '모자')),
+    Object.assign({ question: '음식을 자를 때 쓰는 날카로운 물건이에요. 이게 뭘까요?', image: '🔪' }, pair('칼', '숟가락')),
+    Object.assign({ question: '추울 때 몸에 걸치는 두꺼운 옷이에요. 이게 뭘까요?', image: '🧥' }, pair('외투', '반팔')),
+    Object.assign({ question: '글씨를 쓸 때 쓰는 가늘고 긴 물건이에요. 이게 뭘까요?', image: '✏️' }, pair('연필', '빗')),
   ];
 
-  // 목요일 — 시공간/판단력 (5문항)
+  // 목요일 — 시공간/판단력 (5문항) — 논리 판단 문제, 이미지 없음
   const day3 = [
-    Object.assign({ question: '보통 방에서 창문이랑 문 중에, 어느 쪽이 더 큰가요?', image: '🚪' }, pair('문', '창문')),
-    Object.assign({ question: '보통 냉장고랑 책 중에, 어느 쪽이 더 무거울까요?', image: '🧊' }, pair('냉장고', '책')),
-    Object.assign({ question: '보통 코끼리랑 개미 중에, 어느 쪽이 더 클까요?', image: '🐘' }, pair('코끼리', '개미')),
-    Object.assign({ question: '보통 하늘이랑 땅 중에, 어느 쪽이 위에 있을까요?', image: '🌅' }, pair('하늘', '땅')),
-    Object.assign({ question: '보통 1층이랑 10층 중에, 어느 쪽이 더 높을까요?', image: '🏢' }, pair('10층', '1층')),
+    Object.assign({ question: '보통 방에서 창문이랑 문 중에, 어느 쪽이 더 큰가요?', image: null }, pair('문', '창문')),
+    Object.assign({ question: '보통 냉장고랑 책 중에, 어느 쪽이 더 무거울까요?', image: null }, pair('냉장고', '책')),
+    Object.assign({ question: '보통 코끼리랑 개미 중에, 어느 쪽이 더 클까요?', image: null }, pair('코끼리', '개미')),
+    Object.assign({ question: '보통 하늘이랑 땅 중에, 어느 쪽이 위에 있을까요?', image: null }, pair('하늘', '땅')),
+    Object.assign({ question: '보통 1층이랑 10층 중에, 어느 쪽이 더 높을까요?', image: null }, pair('10층', '1층')),
   ];
 
-  // 금요일 — 지남력 보충 (5문항, 월요일과 다른 각도)
+  // 금요일 — 지남력 보충 (5문항) — 시간 개념 판단, 이미지 없음
   const day4 = [
-    Object.assign({ question: '오늘은 무슨 계절이 끝나가고 있을까요, 다음 계절이 다가오고 있을까요?', image: '🍂' },
+    Object.assign({ question: '오늘은 무슨 계절이 끝나가고 있을까요, 다음 계절이 다가오고 있을까요?', image: null },
       pair('지금 계절', '다음 계절')),
-    Object.assign({ question: '지금 시간이 정오(낮 12시)보다 이를까요, 늦을까요?', image: '🕛' },
+    Object.assign({ question: '지금 시간이 정오(낮 12시)보다 이를까요, 늦을까요?', image: null },
       pair(hour < 12 ? '이르다' : '늦다', hour < 12 ? '늦다' : '이르다')),
-    Object.assign({ question: '오늘 같은 요일이 일주일에 몇 번 있을까요?', image: '📆' }, pair('1번', '7번')),
-    Object.assign({ question: '지금이 아침에 더 가까울까요, 저녁에 더 가까울까요?', image: '🌇' },
+    Object.assign({ question: '오늘 같은 요일이 일주일에 몇 번 있을까요?', image: null }, pair('1번', '7번')),
+    Object.assign({ question: '지금이 아침에 더 가까울까요, 저녁에 더 가까울까요?', image: null },
       pair(hour < 12 ? '아침' : '저녁', hour < 12 ? '저녁' : '아침')),
-    Object.assign({ question: '오늘은 이번 달의 처음 날(1일)일까요, 아닐까요?', image: '📌' },
+    Object.assign({ question: '오늘은 이번 달의 처음 날(1일)일까요, 아닐까요?', image: null },
       pair(now.getDate() === 1 ? '맞다' : '아니다', now.getDate() === 1 ? '아니다' : '맞다')),
   ];
 
