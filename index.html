@@ -1240,7 +1240,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v7.1.0';
+const APP_VERSION = 'v7.1.1';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -3874,6 +3874,7 @@ function trAskMC2({ domain, question, image, correct, wrong, koko }) {
     trSetResponse('');
     trHintUsed = false;
     trSetHint(false, null);
+    window._trCurrentDomain = domain;  // ← 반드시 여기서 설정
 
     const imgHtml = image
       ? `<div style="text-align:center;font-size:72px;margin-bottom:16px;">${image}</div>` : '';
@@ -3884,6 +3885,7 @@ function trAskMC2({ domain, question, image, correct, wrong, koko }) {
       <div class="tr-options">
         ${options.map((o, i) => `<button class="tr-opt" id="tropt${i}" onclick="trSelectMC(${i}, '${o.replace(/'/g,"\\'")}', '${correct.replace(/'/g,"\\'")}', ${JSON.stringify(options)})">${o}</button>`).join('')}
       </div>`);
+    window._trNextStep = resolve;  // ← 핵심: resolve를 저장해야 trSelectMC에서 호출 가능
   });
 }
 
@@ -3896,9 +3898,10 @@ function trSelectMC(idx, chosen, correct, options) {
   const btn = document.getElementById('tropt' + idx);
   if (btn) btn.classList.add(isCorrect ? 'selected' : 'wrong');
   trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect ? 'good' : '');
-  // 해당 promise를 이어받을 수 없어 전역 큐로 신호 전송
   trScore(window._trCurrentDomain || 'attention', isCorrect, trHintUsed ? 1 : 0);
-  setTimeout(() => window._trNextStep && window._trNextStep(), 1400);
+  const next = window._trNextStep;
+  window._trNextStep = null;                       // 중복 호출 방지
+  setTimeout(() => next && next(), 1400);
 }
 
 // 4지선다 MC
@@ -3937,7 +3940,8 @@ function trSelectMC4(idx, chosen, correct, opts) {
   }
   trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect ? 'good' : '');
   trScore(window._trCurrentDomain || 'language', isCorrect, trHintUsed ? 1 : 0);
-  setTimeout(() => window._trNextStep && window._trNextStep(), 1500);
+  const n4 = window._trNextStep; window._trNextStep = null;
+  setTimeout(() => n4 && n4(), 1500);
 }
 
 // 공통점 찾기
@@ -3966,7 +3970,8 @@ function trSelectCommon(idx, chosen, correct, opts) {
   const b = document.getElementById('trcmn'+idx); if(b) b.classList.add(isCorrect ? 'selected' : 'wrong');
   trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect ? 'good' : '');
   trScore('executive', isCorrect, trHintUsed ? 1 : 0);
-  setTimeout(() => window._trNextStep && window._trNextStep(), 1500);
+  const nc = window._trNextStep; window._trNextStep = null;
+  setTimeout(() => nc && nc(), 1500);
 }
 
 // 상황판단
@@ -3995,7 +4000,7 @@ function trSelectSit(idx, chosen, correct, opts) {
   const b=document.getElementById('trsit'+idx); if(b) b.classList.add(isCorrect?'selected':'wrong');
   trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect?'good':'');
   trScore('executive', isCorrect, trHintUsed?1:0);
-  setTimeout(()=>window._trNextStep&&window._trNextStep(), 1500);
+  const ns=window._trNextStep;window._trNextStep=null;setTimeout(()=>ns&&ns(), 1500);
 }
 
 // 계산 문제
@@ -4030,7 +4035,7 @@ function trSelectCalc(idx, chosen, correct, opts) {
   const b=document.getElementById('trcalc'+idx); if(b) b.classList.add(isCorrect?'selected':'wrong');
   trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect?'good':'');
   trScore('calculation', isCorrect, trHintUsed?1:0);
-  setTimeout(()=>window._trNextStep&&window._trNextStep(), 1500);
+  const nca=window._trNextStep;window._trNextStep=null;setTimeout(()=>nca&&nca(), 1500);
 }
 
 // 기억 등록 (단어 제시)
@@ -4115,7 +4120,7 @@ function trSelectRecall(idx, chosen, correct, opts) {
     const cb=document.getElementById('trrec'+ci); if(cb) cb.classList.add('hint');
   }
   trSetResponse(isCorrect ? '기억하셨어요!' : '아쉽지만 괜찮아요.', isCorrect?'good':'');
-  setTimeout(()=>window._trNextStep&&window._trNextStep(chosen), 1500);
+  const nr=window._trNextStep;window._trNextStep=null;setTimeout(()=>nr&&nr(chosen), 1500);
 }
 
 // 단순 정보 카드 (버튼 누르면 넘어감)
