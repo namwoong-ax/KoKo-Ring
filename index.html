@@ -275,6 +275,80 @@
   .quiz-option.selected { background: var(--green-light); border-color: var(--green); color: var(--green-text); }
   .quiz-option.disabled { pointer-events: none; opacity: 0.6; }
   .quiz-option.disabled.selected { opacity: 1; }
+  /* ── 인지훈련 세션 오버레이 (v2.0) ──────────────────────────── */
+  .tr-overlay { position:fixed; inset:0; background:rgba(16,24,40,0.6); display:none; align-items:center; justify-content:center; z-index:600; padding:16px; }
+  .tr-overlay.show { display:flex; }
+  .tr-card { background:white; border-radius:28px; padding:24px 20px 28px; width:100%; max-width:420px; max-height:90vh; overflow-y:auto; box-shadow:0 24px 64px rgba(0,0,0,0.25); }
+  /* 진행 표시 */
+  .tr-progress { display:flex; align-items:center; gap:6px; margin-bottom:18px; justify-content:center; }
+  .tr-phase-dot { width:8px; height:8px; border-radius:50%; background:#E2E8F0; transition:all .25s; }
+  .tr-phase-dot.done { background:var(--green); }
+  .tr-phase-dot.active { background:var(--green); width:20px; border-radius:4px; }
+  /* 도메인 태그 */
+  .tr-domain-tag { display:inline-flex; align-items:center; gap:5px; font-size:12px; font-weight:700; color:var(--green); background:var(--green-light); padding:4px 10px; border-radius:8px; margin-bottom:10px; }
+  /* 코코 말풍선 */
+  .tr-koko-wrap { display:flex; align-items:flex-start; gap:10px; margin-bottom:18px; }
+  .tr-koko-avatar { width:40px; height:40px; border-radius:12px; background-size:cover; background-position:center; flex-shrink:0; }
+  .tr-koko-bubble { background:#F7F8FA; border-radius:4px 16px 16px 16px; padding:12px 14px; font-size:15px; color:#2B3A4F; line-height:22px; flex:1; }
+  /* 제목 / 지시문 */
+  .tr-title { font-size:20px; font-weight:800; color:#16243A; text-align:center; margin-bottom:8px; line-height:1.4; }
+  .tr-instruction { font-size:14px; color:var(--gray); text-align:center; margin-bottom:20px; line-height:20px; }
+  /* 기억 단어 그리드 */
+  .tr-mem-grid { display:flex; flex-direction:column; gap:10px; margin-bottom:22px; }
+  .tr-mem-word { background:var(--green-light); border:2px solid transparent; border-radius:16px; padding:16px; text-align:center; font-size:24px; font-weight:800; color:var(--green); letter-spacing:1px; }
+  .tr-mem-word.numbered { display:flex; align-items:center; gap:12px; padding:14px 18px; text-align:left; font-size:20px; }
+  .tr-mem-num { width:28px; height:28px; border-radius:8px; background:var(--green); color:white; display:flex; align-items:center; justify-content:center; font-size:14px; font-weight:700; flex-shrink:0; }
+  /* 선택지 버튼 */
+  .tr-options { display:flex; flex-direction:column; gap:10px; margin-bottom:6px; }
+  .tr-options.grid-2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .tr-opt { width:100%; background:#F7F8FA; border:2px solid var(--border); border-radius:16px; padding:18px 14px; font-size:17px; font-weight:600; color:#16243A; cursor:pointer; transition:all .15s; text-align:center; }
+  .tr-opt:active { transform:scale(.97); }
+  .tr-opt.selected { background:var(--green-light); border-color:var(--green); color:var(--green); }
+  .tr-opt.wrong { background:#FDECEC; border-color:#D9534F; color:#D9534F; }
+  .tr-opt.hint { border-color:#E5A33D; color:#E5A33D; background:#FEF3C7; }
+  .tr-opt.disabled { pointer-events:none; opacity:.55; }
+  .tr-opt.disabled.selected, .tr-opt.disabled.hint { opacity:1; }
+  /* 피드백 / 반응 메시지 */
+  .tr-response { text-align:center; font-size:15px; color:var(--gray); min-height:22px; margin-bottom:16px; line-height:22px; transition:all .2s; }
+  .tr-response.good { color:#3BA776; font-weight:700; }
+  .tr-response.ok { color:#E5A33D; font-weight:600; }
+  /* 힌트 링크 */
+  .tr-hint-link { text-align:center; font-size:13px; color:var(--gray); text-decoration:underline; cursor:pointer; margin-bottom:14px; }
+  /* 주 버튼 */
+  .tr-btn { width:100%; background:var(--green); color:white; border:none; border-radius:20px; padding:17px; font-size:16px; font-weight:700; cursor:pointer; transition:opacity .15s; }
+  .tr-btn:active { opacity:.8; }
+  .tr-btn.secondary { background:white; color:var(--green); border:2px solid var(--green); margin-top:10px; }
+  /* 영역별 점수 (결과) */
+  .tr-score-grid { display:flex; flex-direction:column; gap:10px; margin:16px 0; }
+  .tr-score-row { display:flex; align-items:center; gap:10px; }
+  .tr-score-emoji { font-size:18px; width:24px; text-align:center; flex-shrink:0; }
+  .tr-score-label { font-size:13px; font-weight:600; color:#3A4A5E; width:54px; flex-shrink:0; }
+  .tr-score-bar-bg { flex:1; height:8px; background:#E2E8F0; border-radius:4px; overflow:hidden; }
+  .tr-score-bar-fill { height:100%; border-radius:4px; background:var(--green); transition:width .6s ease; }
+  .tr-score-val { font-size:13px; font-weight:700; color:var(--green); width:34px; text-align:right; flex-shrink:0; }
+  /* AI 피드백 텍스트 */
+  .tr-feedback-text { font-size:15px; color:#2B3A4F; line-height:24px; background:#F7F8FA; border-radius:16px; padding:16px; margin:14px 0; }
+  .tr-total-score { text-align:center; margin:10px 0; }
+  .tr-total-score-num { font-size:40px; font-weight:800; color:var(--green); }
+  .tr-total-score-max { font-size:18px; color:var(--gray); }
+
+  /* 5일 인지훈련 주간 카드 (자녀 화면) */
+  .tr-week-card { background:white; border-radius:20px; padding:8px 16px; box-shadow:0 8px 24px rgba(16,24,40,0.04); margin-bottom:14px; }
+  .tr-week-row { display:flex; align-items:center; padding:12px 4px; border-bottom:1px solid var(--border); }
+  .tr-week-row:last-child { border-bottom:none; }
+  .tr-week-row.today { background:var(--green-light); border-radius:12px; padding:12px 8px; margin:2px 0; }
+  .tr-week-day { width:24px; font-weight:800; color:#16243A; font-size:15px; flex-shrink:0; }
+  .tr-week-focus { font-size:12px; color:var(--gray); margin-left:8px; flex:1; }
+  .tr-week-score { font-size:14px; font-weight:800; min-width:40px; text-align:right; flex-shrink:0; }
+  .tr-domain-bars { display:flex; flex-direction:column; gap:8px; margin:14px 0; }
+  .tr-domain-row { display:flex; align-items:center; gap:8px; }
+  .tr-domain-emoji { font-size:16px; width:22px; text-align:center; }
+  .tr-domain-name { font-size:12px; font-weight:600; color:#3A4A5E; width:50px; flex-shrink:0; }
+  .tr-domain-bar-bg { flex:1; height:7px; background:#E2E8F0; border-radius:3px; overflow:hidden; }
+  .tr-domain-bar-fill { height:100%; border-radius:3px; transition:width .5s; }
+  .tr-domain-pct { font-size:12px; font-weight:700; width:30px; text-align:right; flex-shrink:0; }
+
+
 
   /* 어르신 프로필 카드 */
   .elder-profile { display: flex; align-items: center; gap: 14px; }
@@ -775,11 +849,37 @@
   </div>
   <canvas id="photo-canvas" style="display:none;"></canvas>
 
-  <!-- 오늘의 퀴즈 (통화 중 카드형 오버레이, 2지선다) -->
-  <div class="quiz-overlay" id="quiz-overlay">
+  <!-- 인지훈련 세션 오버레이 (v2.0) — 통화 후, 사진 전 -->
+  <div class="tr-overlay" id="tr-overlay">
+    <div class="tr-card">
+      <!-- 진행 단계 표시 -->
+      <div class="tr-progress" id="tr-progress"></div>
+      <!-- 도메인 태그 -->
+      <div style="margin-bottom:10px;" id="tr-domain-area"></div>
+      <!-- 코코 말풍선 -->
+      <div class="tr-koko-wrap" id="tr-koko-wrap" style="display:none">
+        <div class="tr-koko-avatar koko-img"></div>
+        <div class="tr-koko-bubble" id="tr-koko-bubble"></div>
+      </div>
+      <!-- 제목 / 지시문 -->
+      <div class="tr-title" id="tr-title"></div>
+      <div class="tr-instruction" id="tr-instruction"></div>
+      <!-- 메인 콘텐츠 (단어 그리드, 선택지 등) -->
+      <div id="tr-content"></div>
+      <!-- 반응 메시지 -->
+      <div class="tr-response" id="tr-response"></div>
+      <!-- 힌트 링크 -->
+      <div class="tr-hint-link" id="tr-hint-link" style="display:none" onclick="useTrainingHint()">💡 힌트 보기</div>
+      <!-- 버튼 영역 -->
+      <div id="tr-action"></div>
+    </div>
+  </div>
+
+  <!-- 구형 퀴즈 오버레이 (하위 호환성 — 실제로 사용 안 됨) -->
+  <div class="quiz-overlay" id="quiz-overlay" style="display:none">
     <div class="quiz-card">
       <div class="quiz-image" id="quiz-image">🧠</div>
-      <div class="quiz-question" id="quiz-question">질문이 여기 표시돼요</div>
+      <div class="quiz-question" id="quiz-question"></div>
       <button class="quiz-option" id="quiz-option-1" onclick="selectQuizOption(1)"></button>
       <button class="quiz-option" id="quiz-option-2" onclick="selectQuizOption(2)"></button>
     </div>
@@ -880,18 +980,22 @@
         <div class="section-head"><div class="section-title">감지된 위험 신호</div></div>
         <div id="analysis-risks"></div>
 
-        <div class="section-head"><div class="section-title">이번 주 인지 체크 (평일 5일)</div></div>
-        <div class="quiz-week-card" id="weekly-quiz-card"></div>
-        <div class="chart-note" style="margin: -8px 0 14px;">월~금 매일 다른 영역(지남력·계산·언어·시공간)에서 5문항씩 진행돼요. 주말은 대화만 하고 쉬어가요.</div>
+        <div class="section-head"><div class="section-title">이번 주 인지훈련 (평일 5일)</div></div>
+        <div class="tr-week-card" id="weekly-training-card"></div>
+        <div class="chart-note" style="margin: -8px 0 14px;">월~금 매일 약 10분 AI 코코와 인지훈련을 진행해요. 주말은 대화와 사진만 하고 쉬어가요.</div>
 
-        <div class="section-head"><div class="section-title">인지 지표 (이번 주)</div></div>
-        <div class="cog-score-card">
-          <div class="cog-total-row">
-            <div class="cog-total-label">종합 점수</div>
-            <div class="cog-total-num" id="cog-total">—</div>
+        <div class="section-head"><div class="section-title">영역별 주간 평균</div></div>
+        <div class="ios-card">
+          <div class="tr-domain-bars" id="domain-bars-weekly"></div>
+        </div>
+
+        <!-- 하위 호환: 기존 인지 지표 카드 -->
+        <div id="cog-legacy-section" style="display:none">
+          <div class="section-head"><div class="section-title">인지 지표 (이번 주)</div></div>
+          <div class="cog-score-card">
+            <div class="cog-total-row"><div class="cog-total-label">종합 점수</div><div class="cog-total-num" id="cog-total">—</div></div>
+            <div id="cog-metrics"></div><div class="cog-note" id="cog-note"></div>
           </div>
-          <div id="cog-metrics"></div>
-          <div class="cog-note" id="cog-note"></div>
         </div>
 
         <div class="section-head"><div class="section-title">주간 기분 추세</div></div>
@@ -1136,7 +1240,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v6.15.3';
+const APP_VERSION = 'v7.0.0';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -3107,226 +3211,759 @@ function confirmPhoto() {
 //   onAnswer: (isCorrect, chosenIndex) => { ... }  // 선택 후 호출됨 (정답 맞았는지 등 전달)
 // });
 let currentQuiz = null;
-function showQuiz({ question, options, correctIndex, image, onAnswer }) {
-  currentQuiz = { question, options, correctIndex, onAnswer };
-  document.getElementById('quiz-question').textContent = question;
+// ═══════════════════════════════════════════════════════════════
+// 코코링 인지훈련 엔진 v2.0
+// MMSE / MoCA-K 참고 기반 — 의료 진단이 아닌 인지 강화 훈련
+// ═══════════════════════════════════════════════════════════════
 
-  const imgEl = document.getElementById('quiz-image');
-  if (!image) {
-    // 이미지가 없는 문항 (계산 등) — 이미지 영역 자체를 숨김
-    imgEl.style.display = 'none';
-  } else if (/^https?:\/\//.test(image)) {
-    imgEl.style.display = 'flex';
-    imgEl.innerHTML = '';
-    const img = document.createElement('img');
-    img.src = image;
-    img.alt = '';
-    imgEl.appendChild(img);
-  } else {
-    // 이모지 또는 텍스트
-    imgEl.style.display = 'flex';
-    imgEl.textContent = image;
-  }
+// ── 도메인 정의 ─────────────────────────────────────────────────
+const TR_DOMAINS = {
+  memory:       { label: '기억력',   emoji: '🧠', color: '#6366F1' },
+  attention:    { label: '주의력',   emoji: '👁️',  color: '#0EA5E9' },
+  calculation:  { label: '계산력',   emoji: '🔢', color: '#10B981' },
+  language:     { label: '언어능력', emoji: '💬', color: '#F59E0B' },
+  visuospatial: { label: '시공간',   emoji: '🗺️', color: '#EF4444' },
+  executive:    { label: '실행기능', emoji: '⚡', color: '#8B5CF6' },
+};
 
-  const opt1 = document.getElementById('quiz-option-1');
-  const opt2 = document.getElementById('quiz-option-2');
-  opt1.textContent = options[0];
-  opt2.textContent = options[1];
-  opt1.className = 'quiz-option';
-  opt2.className = 'quiz-option';
+// ── 요일별 중점 영역 (월=1 … 금=5) ─────────────────────────────
+const TR_DAY_FOCUS = {
+  1: { label: '기억력 중심',      primary: ['memory', 'attention'] },
+  2: { label: '주의력 · 계산',    primary: ['attention', 'calculation'] },
+  3: { label: '언어능력',        primary: ['language', 'executive'] },
+  4: { label: '시공간 · 실행기능', primary: ['visuospatial', 'executive'] },
+  5: { label: '종합훈련',         primary: Object.keys(TR_DOMAINS) },
+};
 
-  document.getElementById('quiz-overlay').classList.add('show');
-}
+// ── 기억 단어 풀 ────────────────────────────────────────────────
+const TR_MEMORY_WORDS = [
+  ['사과','기차','행복'],['나무','구름','웃음'],['강물','봄날','손가락'],
+  ['의자','창문','사랑'],['연필','바람','이웃'],['모자','달빛','고향'],
+  ['책상','햇살','감사'],['신발','비오는날','마음'],['국화','저녁놀','하루'],
+  ['지팡이','달력','희망'],['찻잔','산길','기쁨'],['손목시계','바다','기억'],
+];
 
-function selectQuizOption(n) {
-  if (!currentQuiz) return;
-  const opt1 = document.getElementById('quiz-option-1');
-  const opt2 = document.getElementById('quiz-option-2');
-  const chosen = n === 1 ? opt1 : opt2;
+// ── 훈련 세션 상태 ───────────────────────────────────────────────
+let activeTraining = null;    // 현재 훈련 세션 객체
+let trHintUsed = false;       // 이번 문항 힌트 사용 여부
+let trHintCallback = null;    // 힌트 버튼 콜백
 
-  // 정답/오답을 알려주지 않음 — 어르신이 "시험 보는 느낌"을 받지 않도록,
-  // 그냥 선택했다는 것만 중립적으로 표시하고 조용히 다음으로 넘어감.
-  chosen.classList.add('selected');
-  opt1.classList.add('disabled');
-  opt2.classList.add('disabled');
-
-  const isCorrect = n === currentQuiz.correctIndex;
-  const onAnswer = currentQuiz.onAnswer;
-  setTimeout(() => {
-    document.getElementById('quiz-overlay').classList.remove('show');
-    currentQuiz = null;
-    if (onAnswer) onAnswer(isCorrect, n);
-  }, 500);
-}
-
-function hideQuiz() {
-  document.getElementById('quiz-overlay').classList.remove('show');
-  currentQuiz = null;
-}
-
-// ── 오늘의 인지 체크 퀴즈 (평일 5일 로테이션, 하루 5문항) ──────
-// MMSE 원리를 참고한 자체 간이 문항. 월~금 요일 기준으로 5개 영역을 돌아가며
-// 출제하고(월=지남력, 화=계산, 수=언어, 목=시공간, 금=지남력 보충),
-// 토/일은 퀴즈 없이 대화+사진만 진행함.
-// 한 영역당 1문항만으로는 판단 근거가 약해서, 같은 영역에서 5개 문항을 물어
-// "x/5" 점수로 더 안정적으로 평가함.
-// 참고: "기억력(단어 등록→회상)" 영역은 통화 앞부분에서 코코가 실제로 단어를
-// 제시해야 의미가 있어서, AI 통화 흐름 재구성 작업과 함께 나중에 연결할 예정.
-// 어르신껜 정답/오답을 알려주지 않고, 결과만 기록해뒀다가 주간 리포트에 사용.
-let todaysQuizSet = null; // { domain, score:'x/5', items:[{question,chosen,isCorrect}, ...] }
-
-// 평일(월~금)에만 퀴즈를 내고, 요일별로 영역을 고정 배정함. 주말이면 null.
-function getTodaysQuizDomainIndex() {
-  const dow = new Date().getDay(); // 0=일,1=월,2=화,3=수,4=목,5=금,6=토
-  if (dow === 0 || dow === 6) return null; // 주말엔 퀴즈 없음
-  return dow - 1; // 월=0, 화=1, 수=2, 목=3, 금=4
-}
-
-function buildQuizDomainBank() {
+// ── 세션 생성 ───────────────────────────────────────────────────
+function createTrainingSession() {
   const now = new Date();
-  const month = now.getMonth() + 1;
-  const hour = now.getHours();
-  const seasonOf = (m) => (m >= 3 && m <= 5) ? '봄' : (m >= 6 && m <= 8) ? '여름' : (m >= 9 && m <= 11) ? '가을' : '겨울';
-  const allSeasons = ['봄', '여름', '가을', '겨울'];
-  const realSeason = seasonOf(month);
-  const otherSeasons = allSeasons.filter(s => s !== realSeason);
-  const isDay = hour >= 6 && hour < 18;
   const dow = now.getDay();
-  const isWeekday = dow >= 1 && dow <= 5;
-  const isFirstHalf = now.getDate() <= 15;
+  return {
+    date: `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`,
+    dayOfWeek: dow,
+    startTime: Date.now(),
+    endTime: null,
+    duration: 0,
+    difficulty: 1,
+    focus: (TR_DAY_FOCUS[dow] || TR_DAY_FOCUS[5]).label,
+    domains: Object.fromEntries(Object.keys(TR_DOMAINS).map(k => [k, { score:0, max:0, hints:0 }])),
+    memoryWords: [],
+    memoryRecalled: 0,
+    memoryRecalledWords: [],
+    feedback: '',
+    totalScore: 0,
+    maxTotal: 0,
+    items: [],
+  };
+}
 
-  // 두 보기를 랜덤 순서로 섞고, 정답이 몇 번째인지 알려주는 헬퍼
-  const pair = (correct, wrong) => {
-    const first = Math.random() < 0.5;
-    return { options: first ? [correct, wrong] : [wrong, correct], correctIndex: first ? 1 : 2 };
+// ── 점수 기록 ────────────────────────────────────────────────────
+function trScore(domain, correct, hintsUsed = 0) {
+  if (!activeTraining || !activeTraining.domains[domain]) return;
+  activeTraining.domains[domain].max++;
+  if (correct) activeTraining.domains[domain].score++;
+  activeTraining.domains[domain].hints += hintsUsed;
+  activeTraining.items.push({ domain, correct, hintsUsed, ts: Date.now() });
+}
+
+// ── UI 헬퍼 ──────────────────────────────────────────────────────
+function trShowOverlay(visible) {
+  const el = document.getElementById('tr-overlay');
+  if (el) { visible ? el.classList.add('show') : el.classList.remove('show'); }
+}
+
+function trSetProgress(phase, total) {
+  const el = document.getElementById('tr-progress');
+  if (!el) return;
+  el.innerHTML = Array.from({length: total}, (_, i) =>
+    `<div class="tr-phase-dot ${i < phase ? 'done' : i === phase ? 'active' : ''}"></div>`
+  ).join('');
+}
+
+function trSetDomain(domain) {
+  const el = document.getElementById('tr-domain-area');
+  if (!el) return;
+  if (!domain) { el.innerHTML = ''; return; }
+  const d = TR_DOMAINS[domain];
+  el.innerHTML = `<div class="tr-domain-tag">${d ? d.emoji : '📝'} ${d ? d.label : domain}</div>`;
+}
+
+function trSetKoko(msg) {
+  const wrap = document.getElementById('tr-koko-wrap');
+  const bubble = document.getElementById('tr-koko-bubble');
+  if (!wrap || !bubble) return;
+  if (!msg) { wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+  bubble.textContent = msg;
+}
+
+function trSetTitle(title, instruction = '') {
+  const t = document.getElementById('tr-title');
+  const i = document.getElementById('tr-instruction');
+  if (t) t.textContent = title;
+  if (i) i.textContent = instruction;
+}
+
+function trSetResponse(msg, type = '') {
+  const el = document.getElementById('tr-response');
+  if (!el) return;
+  el.textContent = msg;
+  el.className = 'tr-response' + (type ? ' ' + type : '');
+}
+
+function trSetContent(html) {
+  const el = document.getElementById('tr-content');
+  if (el) el.innerHTML = html;
+}
+
+function trSetAction(html) {
+  const el = document.getElementById('tr-action');
+  if (el) el.innerHTML = html;
+}
+
+function trSetHint(visible, callback) {
+  const el = document.getElementById('tr-hint-link');
+  if (!el) return;
+  el.style.display = visible ? 'block' : 'none';
+  trHintCallback = callback || null;
+}
+
+function useTrainingHint() {
+  trHintUsed = true;
+  if (trHintCallback) trHintCallback();
+  trSetHint(false, null);
+}
+
+// ── 따뜻한 반응 메시지 ───────────────────────────────────────────
+const TR_CORRECT_MSGS = [
+  '잘 하셨어요! 👍', '정말 잘 기억하셨네요!', '훌륭해요!',
+  '바로 맞히셨어요!', '역시 잘 하시네요!', '대단해요!',
+];
+const TR_PARTIAL_MSGS = [
+  '조금 아쉽지만 괜찮아요.', '열심히 하셨어요!', '잘 하려고 노력하셨어요.',
+  '어렵지만 잘 하고 계세요.', '괜찮아요, 계속 해봐요!',
+];
+const TR_WRONG_MSGS = [
+  '이런 건 어려울 수 있어요. 괜찮아요.', '다음에는 더 잘 하실 거예요!',
+  '조금 어려웠죠? 함께 연습해요.', '처음엔 다 어렵답니다!',
+];
+function trPick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// 잠깐 딜레이
+const trDelay = ms => new Promise(r => setTimeout(r, ms));
+
+// ── 문제 유형별 출제 함수 ─────────────────────────────────────────
+
+// 2지선다 MC
+function trAskMC2({ domain, question, image, correct, wrong, koko }) {
+  return new Promise(resolve => {
+    trSetDomain(domain);
+    trSetKoko(koko || null);
+    trSetTitle(question);
+    trSetInstruction('');
+    trSetResponse('');
+    trHintUsed = false;
+    trSetHint(false, null);
+
+    const imgHtml = image
+      ? `<div style="text-align:center;font-size:72px;margin-bottom:16px;">${image}</div>` : '';
+    trSetContent(imgHtml);
+
+    const options = Math.random() < 0.5 ? [correct, wrong] : [wrong, correct];
+    trSetAction(`
+      <div class="tr-options">
+        ${options.map((o, i) => `<button class="tr-opt" id="tropt${i}" onclick="trSelectMC(${i}, '${o.replace(/'/g,"\\'")}', '${correct.replace(/'/g,"\\'")}', ${JSON.stringify(options)})">${o}</button>`).join('')}
+      </div>`);
+  });
+}
+
+function trSelectMC(idx, chosen, correct, options) {
+  const isCorrect = chosen === correct;
+  options.forEach((_, i) => {
+    const btn = document.getElementById('tropt' + i);
+    if (btn) btn.classList.add('disabled');
+  });
+  const btn = document.getElementById('tropt' + idx);
+  if (btn) btn.classList.add(isCorrect ? 'selected' : 'wrong');
+  trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect ? 'good' : '');
+  // 해당 promise를 이어받을 수 없어 전역 큐로 신호 전송
+  trScore(window._trCurrentDomain || 'attention', isCorrect, trHintUsed ? 1 : 0);
+  setTimeout(() => window._trNextStep && window._trNextStep(), 1400);
+}
+
+// 4지선다 MC
+function trAskMC4({ domain, question, correct, distractors, koko }) {
+  return new Promise(resolve => {
+    trSetDomain(domain);
+    trSetKoko(koko || null);
+    trSetTitle(question);
+    trSetResponse('');
+    trHintUsed = false;
+    window._trCurrentDomain = domain;
+
+    const opts = [correct, ...distractors.slice(0,3)].sort(() => Math.random() - .5);
+    trSetContent('');
+    trSetAction(`
+      <div class="tr-options">
+        ${opts.map((o, i) => `<button class="tr-opt" id="tr4opt${i}" onclick="trSelectMC4(${i}, '${o.replace(/'/g,"\\'")}', '${correct.replace(/'/g,"\\'")}', ${JSON.stringify(opts)})">${o}</button>`).join('')}
+      </div>`);
+    window._trNextStep = resolve;
+  });
+}
+
+function trSelectMC4(idx, chosen, correct, opts) {
+  const isCorrect = chosen === correct;
+  opts.forEach((_, i) => {
+    const btn = document.getElementById('tr4opt' + i);
+    if (btn) btn.classList.add('disabled');
+  });
+  const btn = document.getElementById('tr4opt' + idx);
+  if (btn) btn.classList.add(isCorrect ? 'selected' : 'wrong');
+  // 정답 버튼도 표시
+  if (!isCorrect) {
+    const ci = opts.indexOf(correct);
+    const cb = document.getElementById('tr4opt' + ci);
+    if (cb) cb.classList.add('hint');
+  }
+  trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect ? 'good' : '');
+  trScore(window._trCurrentDomain || 'language', isCorrect, trHintUsed ? 1 : 0);
+  setTimeout(() => window._trNextStep && window._trNextStep(), 1500);
+}
+
+// 공통점 찾기
+function trAskCommon({ word1, word2, correct, wrong, koko }) {
+  return new Promise(resolve => {
+    trSetDomain('executive');
+    trSetKoko(koko || `"${word1}"와 "${word2}"의 공통점은 무엇일까요?`);
+    trSetTitle('두 가지의 공통점은?');
+    trSetResponse('');
+    trHintUsed = false;
+    window._trCurrentDomain = 'executive';
+    window._trNextStep = resolve;
+
+    const opts = Math.random() < .5 ? [correct, wrong] : [wrong, correct];
+    trSetContent('');
+    trSetAction(`
+      <div class="tr-options">
+        ${opts.map((o, i) => `<button class="tr-opt" id="trcmn${i}" onclick="trSelectCommon(${i},'${o.replace(/'/g,"\\'")}','${correct.replace(/'/g,"\\'")}',${JSON.stringify(opts)})">${o}</button>`).join('')}
+      </div>`);
+  });
+}
+
+function trSelectCommon(idx, chosen, correct, opts) {
+  const isCorrect = chosen === correct;
+  opts.forEach((_, i) => { const b = document.getElementById('trcmn'+i); if(b) b.classList.add('disabled'); });
+  const b = document.getElementById('trcmn'+idx); if(b) b.classList.add(isCorrect ? 'selected' : 'wrong');
+  trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect ? 'good' : '');
+  trScore('executive', isCorrect, trHintUsed ? 1 : 0);
+  setTimeout(() => window._trNextStep && window._trNextStep(), 1500);
+}
+
+// 상황판단
+function trAskSituation({ situation, correct, wrong, koko }) {
+  return new Promise(resolve => {
+    trSetDomain('executive');
+    trSetKoko(koko || '');
+    trSetTitle(situation);
+    trSetResponse('');
+    trHintUsed = false;
+    window._trCurrentDomain = 'executive';
+    window._trNextStep = resolve;
+
+    const opts = Math.random() < .5 ? [correct, wrong] : [wrong, correct];
+    trSetContent('');
+    trSetAction(`
+      <div class="tr-options">
+        ${opts.map((o, i) => `<button class="tr-opt" id="trsit${i}" onclick="trSelectSit(${i},'${o.replace(/'/g,"\\'")}','${correct.replace(/'/g,"\\'")}',${JSON.stringify(opts)})">${o}</button>`).join('')}
+      </div>`);
+  });
+}
+
+function trSelectSit(idx, chosen, correct, opts) {
+  const isCorrect = chosen === correct;
+  opts.forEach((_, i) => { const b=document.getElementById('trsit'+i); if(b) b.classList.add('disabled'); });
+  const b=document.getElementById('trsit'+idx); if(b) b.classList.add(isCorrect?'selected':'wrong');
+  trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect?'good':'');
+  trScore('executive', isCorrect, trHintUsed?1:0);
+  setTimeout(()=>window._trNextStep&&window._trNextStep(), 1500);
+}
+
+// 계산 문제
+function trAskCalc({ a, b, op }) {
+  return new Promise(resolve => {
+    trSetDomain('calculation');
+    let q, correct;
+    if (op === '-') { q = `${a}에서 ${b}을 빼면 얼마일까요?`; correct = a - b; }
+    else { q = `${a}에 ${b}을 더하면 얼마일까요?`; correct = a + b; }
+    const off = 15 + Math.floor(Math.random() * 10);
+    const wrong = Math.random() < .5 ? correct + off : Math.max(1, correct - off);
+    const opts = Math.random() < .5 ? [String(correct), String(wrong)] : [String(wrong), String(correct)];
+
+    trSetKoko(null);
+    trSetTitle(q);
+    trSetResponse('');
+    trHintUsed = false;
+    window._trCurrentDomain = 'calculation';
+    window._trNextStep = resolve;
+
+    trSetContent('');
+    trSetAction(`
+      <div class="tr-options">
+        ${opts.map((o,i) => `<button class="tr-opt" id="trcalc${i}" onclick="trSelectCalc(${i},'${o}','${String(correct)}',${JSON.stringify(opts)})">${o}</button>`).join('')}
+      </div>`);
+  });
+}
+
+function trSelectCalc(idx, chosen, correct, opts) {
+  const isCorrect = chosen === correct;
+  opts.forEach((_,i)=>{ const b=document.getElementById('trcalc'+i); if(b) b.classList.add('disabled'); });
+  const b=document.getElementById('trcalc'+idx); if(b) b.classList.add(isCorrect?'selected':'wrong');
+  trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect?'good':'');
+  trScore('calculation', isCorrect, trHintUsed?1:0);
+  setTimeout(()=>window._trNextStep&&window._trNextStep(), 1500);
+}
+
+// 기억 등록 (단어 제시)
+function trShowMemoryWords(words) {
+  return new Promise(resolve => {
+    trSetDomain('memory');
+    trSetKoko('잠깐, 아래 단어들을 잘 기억해두세요. 나중에 다시 여쭤볼게요!');
+    trSetTitle('기억해주세요');
+    trSetInstruction('단어들을 천천히 읽어보세요');
+    trSetResponse('');
+    trHintUsed = false;
+    trSetHint(false, null);
+
+    trSetContent(`
+      <div class="tr-mem-grid">
+        ${words.map((w, i) => `
+          <div class="tr-mem-word numbered">
+            <div class="tr-mem-num">${i+1}</div>
+            <div>${w}</div>
+          </div>`).join('')}
+      </div>`);
+
+    trSetAction(`<button class="tr-btn" onclick="window._trNextStep && window._trNextStep()">기억했어요 ✓</button>`);
+    window._trNextStep = resolve;
+  });
+}
+
+// 기억 회상 (단어별로 4지선다)
+async function trDoMemoryRecall(words) {
+  let recalled = 0;
+  const recalledWords = [];
+
+  for (let i = 0; i < words.length; i++) {
+    const target = words[i];
+    // 오답 풀: 기억단어 외의 단어들 + 일반 단어
+    const decoys = ['바람','가을','강아지','버스','국화','저녁','소나무','물고기',
+                    '노래','지갑','우산','구두','달력','약국','이웃','봄비']
+      .filter(w => !words.includes(w))
+      .sort(() => Math.random() - .5).slice(0, 3);
+    const opts = [target, ...decoys].sort(() => Math.random() - .5);
+
+    const chosen = await new Promise(resolve => {
+      trSetDomain('memory');
+      if (i === 0) trSetKoko('아까 기억하신 단어들, 생각나세요? 하나씩 골라보세요.');
+      else trSetKoko('잘 하고 계세요! 계속 골라주세요.');
+      trSetTitle(`${i+1}번째 단어는 무엇이었나요?`);
+      trSetInstruction(`총 ${words.length}개 중 ${i+1}번째`);
+      trSetResponse('');
+      trHintUsed = false;
+      window._trCurrentDomain = 'memory';
+      window._trNextStep = null;
+
+      // 힌트: 첫 글자 공개
+      trSetHint(true, () => {
+        trSetInstruction(`힌트: "${target[0]}"으로 시작해요`);
+      });
+
+      trSetContent('');
+      trSetAction(`
+        <div class="tr-options">
+          ${opts.map((o, j) => `<button class="tr-opt" id="trrec${j}" onclick="trSelectRecall(${j},'${o.replace(/'/g,"\\'")}','${target.replace(/'/g,"\\'")}',${JSON.stringify(opts)})">${o}</button>`).join('')}
+        </div>`);
+      window._trNextStep = resolve;
+    });
+
+    if (chosen === target) {
+      recalled++;
+      recalledWords.push(target);
+    }
+    trScore('memory', chosen === target, trHintUsed ? 1 : 0);
+    await trDelay(1000);
+  }
+  return { recalled, recalledWords };
+}
+
+function trSelectRecall(idx, chosen, correct, opts) {
+  const isCorrect = chosen === correct;
+  opts.forEach((_,i)=>{ const b=document.getElementById('trrec'+i); if(b) b.classList.add('disabled'); });
+  const b=document.getElementById('trrec'+idx); if(b) b.classList.add(isCorrect?'selected':'wrong');
+  if (!isCorrect) {
+    const ci=opts.indexOf(correct);
+    const cb=document.getElementById('trrec'+ci); if(cb) cb.classList.add('hint');
+  }
+  trSetResponse(isCorrect ? '기억하셨어요!' : '아쉽지만 괜찮아요.', isCorrect?'good':'');
+  setTimeout(()=>window._trNextStep&&window._trNextStep(chosen), 1500);
+}
+
+// 단순 정보 카드 (버튼 누르면 넘어감)
+function trShowInfo({ koko, title, instruction, btnLabel }) {
+  return new Promise(resolve => {
+    trSetDomain(null);
+    trSetKoko(koko || null);
+    trSetTitle(title || '');
+    trSetInstruction(instruction || '');
+    trSetResponse('');
+    trSetContent('');
+    trSetHint(false, null);
+    trSetAction(`<button class="tr-btn" onclick="window._trNextStep&&window._trNextStep()">${btnLabel || '시작할게요!'}</button>`);
+    window._trNextStep = resolve;
+  });
+}
+
+// ── 요일별 문제 뱅크 ─────────────────────────────────────────────
+function getTodayTasks(dow, difficulty) {
+  // 지남력(오리엔테이션) — 항상 포함
+  const now = new Date();
+  const m = now.getMonth() + 1;
+  const h = now.getHours();
+  const season = m>=3&&m<=5?'봄':m>=6&&m<=8?'여름':m>=9&&m<=11?'가을':'겨울';
+  const otherSeasons = ['봄','여름','가을','겨울'].filter(s=>s!==season);
+  const wrongSeason = otherSeasons[Math.floor(Math.random()*otherSeasons.length)];
+  const isAM = h < 12;
+
+  const orientTask = {
+    type: 'mc2', domain: 'attention',
+    question: '지금은 어떤 계절에 더 가까울까요?',
+    correct: season, wrong: wrongSeason,
+    koko: '먼저 간단한 질문부터 드릴게요!'
   };
 
-  // 월요일 — 지남력 (5문항) — 텍스트로만 충분, 이미지 없음
-  const day0 = [
-    Object.assign({ question: '지금은 어떤 계절에 더 가까울까요?', image: null },
-      pair(realSeason, otherSeasons[Math.floor(Math.random()*otherSeasons.length)])),
-    Object.assign({ question: '지금은 낮일까요, 밤일까요?', image: null },
-      pair(isDay ? '낮' : '밤', isDay ? '밤' : '낮')),
-    Object.assign({ question: '지금은 오전일까요, 오후일까요?', image: null },
-      pair(hour < 12 ? '오전' : '오후', hour < 12 ? '오후' : '오전')),
-    Object.assign({ question: '오늘은 평일에 가까울까요, 주말에 가까울까요?', image: null },
-      pair(isWeekday ? '평일' : '주말', isWeekday ? '주말' : '평일')),
-    Object.assign({ question: '지금은 이번 달 초(1~15일)일까요, 말(16일 이후)일까요?', image: null },
-      pair(isFirstHalf ? '초' : '말', isFirstHalf ? '말' : '초')),
+  // 공통점 찾기 풀
+  const commonPool = [
+    { word1:'사과',word2:'바나나',correct:'과일이에요',wrong:'채소예요' },
+    { word1:'자동차',word2:'기차',correct:'타고 다니는 것이에요',wrong:'먹는 것이에요' },
+    { word1:'개',word2:'고양이',correct:'동물이에요',wrong:'식물이에요' },
+    { word1:'국화',word2:'장미',correct:'꽃이에요',wrong:'나무예요' },
+    { word1:'의자',word2:'침대',correct:'앉거나 눕는 가구예요',wrong:'먹는 도구예요' },
+    { word1:'연필',word2:'볼펜',correct:'글씨를 쓰는 도구예요',wrong:'그림 그리는 도구예요' },
+    { word1:'봄',word2:'가을',correct:'따뜻한 계절이에요',wrong:'추운 계절이에요' },
+    { word1:'의사',word2:'간호사',correct:'병원에서 일해요',wrong:'학교에서 일해요' },
   ];
 
-  // 화요일 — 계산 (5문항) — 숫자 문제, 이미지 없음
-  // 오답은 정답과 15~25 차이 — 누가 봐도 다른 수로 느껴지게, 계산을 실제로 해야만 구별 가능
-  const used = new Set();
-  const day1 = Array.from({ length: 5 }, () => {
-    let a;
-    do { a = 20 + Math.floor(Math.random() * 79); } while (used.has(a));
-    used.add(a);
-    const correct = a - 7;
-    const offset = 15 + Math.floor(Math.random() * 11); // 15~25 차이
-    const wrong = Math.random() < 0.5 ? correct + offset : Math.max(1, correct - offset);
-    return Object.assign({ question: `${a}에서 7을 빼면 얼마일까요?`, image: null }, pair(String(correct), String(wrong)));
+  // 상황판단 풀
+  const situPool = [
+    { situation:'가스 불을 켜놓고 외출하려고 할 때 어떻게 하시겠어요?', correct:'불을 끄고 나가요', wrong:'그냥 나가요' },
+    { situation:'길을 걷다가 지갑을 잃어버렸을 때 어떻게 하시겠어요?', correct:'경찰에 신고해요', wrong:'그냥 집에 가요' },
+    { situation:'모르는 전화번호에서 전화가 왔을 때 개인정보를 물어보면?', correct:'절대 알려주지 않아요', wrong:'친절하게 알려줘요' },
+    { situation:'갑자기 가슴이 심하게 아프다면?', correct:'119에 전화하거나 병원에 가요', wrong:'좀 쉬면 나을 거라고 참아요' },
+    { situation:'약을 먹는 것을 잊어버렸을 때는?', correct:'의사나 약사에게 물어봐요', wrong:'한꺼번에 두 배로 먹어요' },
+  ];
+
+  // 언어 풀 (mc4)
+  const langPool = [
+    { question:'손목에 차고 시간을 보는 물건이에요. 이게 뭘까요?', correct:'시계', distractors:['안경','자전거','칫솔'], koko:null },
+    { question:'비 올 때 펼쳐서 쓰는 물건이에요. 이게 뭘까요?', correct:'우산', distractors:['모자','신발','가방'], koko:null },
+    { question:'이를 닦을 때 쓰는 솔 모양의 도구예요. 이게 뭘까요?', correct:'칫솔', distractors:['빗','연필','지팡이'], koko:null },
+    { question:'음식을 자를 때 쓰는 날카로운 도구예요. 이게 뭘까요?', correct:'칼', distractors:['숟가락','젓가락','냄비'], koko:null },
+    { question:'머리를 감을 때 쓰는 세정제예요. 이게 뭘까요?', correct:'샴푸', distractors:['간장','참기름','비누'], koko:null },
+    { question:'날짜와 요일이 적혀있는 종이예요. 이게 뭘까요?', correct:'달력', distractors:['신문','교과서','지도'], koko:null },
+  ];
+
+  // 시공간 풀 (mc2)
+  const spatialPool = [
+    { question:"코끼리랑 개미 중에, 어느 쪽이 더 클까요?", correct:'코끼리', wrong:'개미' },
+    { question:"냉장고랑 책 중에, 어느 쪽이 더 무거울까요?", correct:'냉장고', wrong:'책' },
+    { question:"하늘이랑 땅 중에, 어느 쪽이 더 높을까요?", correct:'하늘', wrong:'땅' },
+    { question:"비행기랑 자전거 중에, 어느 쪽이 더 빠를까요?", correct:'비행기', wrong:'자전거' },
+    { question:"서울이랑 제주도 중에, 어느 쪽이 더 넓을까요?", correct:'서울', wrong:'제주도' },
+  ];
+
+  // 계산 문제 (난이도별)
+  function randCalc() {
+    const subs = difficulty <= 1 ? [3,4,5] : difficulty === 2 ? [6,7,8] : [7,8,9];
+    const sub = subs[Math.floor(Math.random()*subs.length)];
+    const a = 10 + Math.floor(Math.random() * (difficulty <= 1 ? 40 : difficulty === 2 ? 60 : 80));
+    return { type:'calc', a, b:sub, op:'-' };
+  }
+
+  // 요일별 문제 조합 구성
+  let tasks = [orientTask]; // 항상 지남력 시작
+
+  const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+
+  if (dow === 1) { // 월: 기억력 중심 — 계산 + 공통점
+    tasks.push(randCalc());
+    tasks.push({ type:'common', ...pick(commonPool) });
+    tasks.push(randCalc());
+    tasks.push({ type:'mc4', domain:'language', ...pick(langPool) });
+  } else if (dow === 2) { // 화: 주의력·계산
+    tasks.push(randCalc());
+    tasks.push(randCalc());
+    tasks.push({ type:'mc2', domain:'visuospatial', ...pick(spatialPool), koko:null });
+    tasks.push({ type:'situation', ...pick(situPool), koko:null });
+  } else if (dow === 3) { // 수: 언어
+    tasks.push({ type:'mc4', domain:'language', ...pick(langPool) });
+    tasks.push({ type:'mc4', domain:'language', ...pick(langPool.filter(l=>l.correct!==tasks.at(-1).correct)) });
+    tasks.push({ type:'common', ...pick(commonPool) });
+    tasks.push(randCalc());
+  } else if (dow === 4) { // 목: 시공간·실행
+    tasks.push({ type:'mc2', domain:'visuospatial', ...pick(spatialPool), koko:null });
+    tasks.push({ type:'mc2', domain:'visuospatial', ...pick(spatialPool.filter(s=>s.correct!==tasks.at(-1).correct)), koko:null });
+    tasks.push({ type:'situation', ...pick(situPool), koko:null });
+    tasks.push({ type:'common', ...pick(commonPool) });
+  } else { // 금: 종합 + 토/일 fallback
+    tasks.push(randCalc());
+    tasks.push({ type:'mc4', domain:'language', ...pick(langPool) });
+    tasks.push({ type:'mc2', domain:'visuospatial', ...pick(spatialPool), koko:null });
+    tasks.push({ type:'common', ...pick(commonPool) });
+  }
+
+  return tasks;
+}
+
+// ── 메인 훈련 세션 진입점 ─────────────────────────────────────────
+async function runCognitiveTraining() {
+  const dow = new Date().getDay();
+  // 토/일은 훈련 없음
+  if (dow === 0 || dow === 6) { activeTraining = null; return null; }
+
+  activeTraining = createTrainingSession();
+  trShowOverlay(true);
+  const TOTAL_PHASES = 5;
+
+  // ── Phase 0: 인트로 ──────────────────────────────────────
+  trSetProgress(0, TOTAL_PHASES);
+  const focusInfo = TR_DAY_FOCUS[dow] || TR_DAY_FOCUS[5];
+  await trShowInfo({
+    koko: '통화 잘 하셨어요! 이제 잠깐 두뇌 운동을 해볼까요? 딱 10분이에요!',
+    title: `오늘의 훈련`,
+    instruction: `${focusInfo.label} — 천천히 하셔도 돼요`,
+    btnLabel: '시작할게요!',
   });
 
-  // 수요일 — 언어 (사물 인지, 5문항) — 사물 이름 맞히기라 연관 이모지 표시
-  const day2 = [
-    Object.assign({ question: '손목에 차고 시간을 보는 물건이에요. 이게 뭘까요?', image: '⌚' }, pair('시계', '안경')),
-    Object.assign({ question: '비 올 때 펼쳐서 쓰는 물건이에요. 이게 뭘까요?', image: '☔' }, pair('우산', '모자')),
-    Object.assign({ question: '음식을 자를 때 쓰는 날카로운 물건이에요. 이게 뭘까요?', image: '🔪' }, pair('칼', '숟가락')),
-    Object.assign({ question: '추울 때 몸에 걸치는 두꺼운 옷이에요. 이게 뭘까요?', image: '🧥' }, pair('외투', '반팔')),
-    Object.assign({ question: '글씨를 쓸 때 쓰는 가늘고 긴 물건이에요. 이게 뭘까요?', image: '✏️' }, pair('연필', '빗')),
-  ];
+  // ── Phase 1: 기억 등록 ──────────────────────────────────
+  trSetProgress(1, TOTAL_PHASES);
+  const wordSet = TR_MEMORY_WORDS[Math.floor(Math.random() * TR_MEMORY_WORDS.length)];
+  const numWords = activeTraining.difficulty <= 1 ? 3 : activeTraining.difficulty === 2 ? 4 : 5;
+  const memWords = wordSet.slice(0, numWords);
+  activeTraining.memoryWords = memWords;
+  await trShowMemoryWords(memWords);
 
-  // 목요일 — 시공간/판단력 (5문항) — 논리 판단 문제, 이미지 없음
-  const day3 = [
-    Object.assign({ question: '보통 방에서 창문이랑 문 중에, 어느 쪽이 더 큰가요?', image: null }, pair('문', '창문')),
-    Object.assign({ question: '보통 냉장고랑 책 중에, 어느 쪽이 더 무거울까요?', image: null }, pair('냉장고', '책')),
-    Object.assign({ question: '보통 코끼리랑 개미 중에, 어느 쪽이 더 클까요?', image: null }, pair('코끼리', '개미')),
-    Object.assign({ question: '보통 하늘이랑 땅 중에, 어느 쪽이 위에 있을까요?', image: null }, pair('하늘', '땅')),
-    Object.assign({ question: '보통 1층이랑 10층 중에, 어느 쪽이 더 높을까요?', image: null }, pair('10층', '1층')),
-  ];
+  // ── Phase 2: 영역별 훈련 문제 ────────────────────────────
+  trSetProgress(2, TOTAL_PHASES);
+  const tasks = getTodayTasks(dow, activeTraining.difficulty);
 
-  // 금요일 — 지남력 보충 (5문항) — 시간 개념 판단, 이미지 없음
-  const day4 = [
-    Object.assign({ question: '오늘은 무슨 계절이 끝나가고 있을까요, 다음 계절이 다가오고 있을까요?', image: null },
-      pair('지금 계절', '다음 계절')),
-    Object.assign({ question: '지금 시간이 정오(낮 12시)보다 이를까요, 늦을까요?', image: null },
-      pair(hour < 12 ? '이르다' : '늦다', hour < 12 ? '늦다' : '이르다')),
-    Object.assign({ question: '오늘 같은 요일이 일주일에 몇 번 있을까요?', image: null }, pair('1번', '7번')),
-    Object.assign({ question: '지금이 아침에 더 가까울까요, 저녁에 더 가까울까요?', image: null },
-      pair(hour < 12 ? '아침' : '저녁', hour < 12 ? '저녁' : '아침')),
-    Object.assign({ question: '오늘은 이번 달의 처음 날(1일)일까요, 아닐까요?', image: null },
-      pair(now.getDate() === 1 ? '맞다' : '아니다', now.getDate() === 1 ? '아니다' : '맞다')),
-  ];
+  for (let i = 0; i < tasks.length; i++) {
+    trSetProgress(2, TOTAL_PHASES);
+    const task = tasks[i];
+    window._trCurrentDomain = task.domain;
 
-  const domains = [
-    { domain: '지남력', questions: day0 },
-    { domain: '계산', questions: day1 },
-    { domain: '언어', questions: day2 },
-    { domain: '시공간', questions: day3 },
-    { domain: '지남력', questions: day4 },
-  ];
-
-  // 영역-요일 배정을 주마다 무작위로 섞음. 단, 매번 새로 계산해도 같은 주 안에서는
-  // 항상 같은 순서가 나오도록 "이번 주 월요일 날짜"를 시드로 사용함
-  // (예: 화요일에 계산했다가 나중에 다시 계산해도 똑같이 나와야 자녀 화면이 안 어긋남).
-  const mondayStr = getThisWeekDates()[0];
-  const rnd = seededRandom(hashStringToSeed(mondayStr));
-  return seededShuffle(domains, rnd);
-}
-
-// 문자열 → 숫자 시드로 바꾸는 간단한 해시
-function hashStringToSeed(str) {
-  let h = 0;
-  for (let i = 0; i < str.length; i++) h = (h * 31 + str.charCodeAt(i)) | 0;
-  return h >>> 0;
-}
-
-// 시드 기반 의사난수 생성기(mulberry32) — 같은 시드를 넣으면 항상 같은 순서가 나옴
-function seededRandom(seed) {
-  let t = seed;
-  return function () {
-    t |= 0; t = (t + 0x6D2B79F5) | 0;
-    let r = Math.imul(t ^ (t >>> 15), 1 | t);
-    r = (r + Math.imul(r ^ (r >>> 7), 61 | r)) ^ r;
-    return ((r ^ (r >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-// 시드 기반 배열 셔플(Fisher–Yates)
-function seededShuffle(arr, rnd) {
-  const a = arr.slice();
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(rnd() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
+    if (task.type === 'mc2') {
+      await trAskMC2({ domain:task.domain, question:task.question,
+        correct:task.correct, wrong:task.wrong, koko:task.koko, image:task.image });
+    } else if (task.type === 'mc4') {
+      await trAskMC4({ domain:task.domain, question:task.question,
+        correct:task.correct, distractors:task.distractors, koko:task.koko });
+    } else if (task.type === 'common') {
+      await trAskCommon({ word1:task.word1, word2:task.word2,
+        correct:task.correct, wrong:task.wrong, koko:task.koko });
+    } else if (task.type === 'situation') {
+      await trAskSituation({ situation:task.situation,
+        correct:task.correct, wrong:task.wrong, koko:task.koko });
+    } else if (task.type === 'calc') {
+      await trAskCalc({ a:task.a, b:task.b, op:task.op });
+    }
   }
-  return a;
+
+  // ── Phase 3: 기억 회상 ──────────────────────────────────
+  trSetProgress(3, TOTAL_PHASES);
+  trSetKoko('훈련 잘 하셨어요! 마지막으로, 처음에 기억하신 단어들 생각나세요?');
+  await trDelay(1800);
+  const { recalled, recalledWords } = await trDoMemoryRecall(memWords);
+  activeTraining.memoryRecalled = recalled;
+  activeTraining.memoryRecalledWords = recalledWords;
+
+  // ── Phase 4: AI 피드백 ─────────────────────────────────
+  trSetProgress(4, TOTAL_PHASES);
+  trSetDomain(null);
+  trSetKoko('오늘 훈련 결과를 정리하고 있어요...');
+  trSetTitle('');
+  trSetInstruction('');
+  trSetContent('<div style="text-align:center;font-size:32px;padding:20px;">🧠</div>');
+  trSetAction('');
+  trSetResponse('');
+  trSetHint(false, null);
+
+  // 점수 집계
+  let totalScore = 0, maxTotal = 0;
+  Object.values(activeTraining.domains).forEach(d => {
+    totalScore += d.score;
+    maxTotal += d.max;
+  });
+  activeTraining.totalScore = totalScore;
+  activeTraining.maxTotal = maxTotal;
+  activeTraining.endTime = Date.now();
+  activeTraining.duration = Math.round((activeTraining.endTime - activeTraining.startTime) / 1000 / 60 * 10) / 10;
+
+  // 난이도 자동 조절
+  const ratio = maxTotal > 0 ? totalScore / maxTotal : 0;
+  if (ratio >= 0.85 && activeTraining.difficulty < 3) activeTraining.difficulty++;
+  else if (ratio < 0.5 && activeTraining.difficulty > 1) activeTraining.difficulty--;
+
+  // AI 피드백 생성
+  let feedbackText = '';
+  try {
+    const domainSummary = Object.entries(activeTraining.domains)
+      .filter(([, d]) => d.max > 0)
+      .map(([k, d]) => `${TR_DOMAINS[k].label}: ${d.score}/${d.max}`)
+      .join(', ');
+    const prompt = `오늘 인지훈련 결과: ${domainSummary}. 기억 회상: ${recalled}/${memWords.length}개.
+어르신께 따뜻하고 긍정적인 피드백을 2~3문장으로 작성해주세요. "오늘 훈련"으로 시작하고, 잘한 점을 먼저, 격려로 마무리하세요. 이모지는 쓰지 마세요.`;
+    feedbackText = await callGemini([{ role:'user', content:prompt }], 200, false);
+    if (!feedbackText || feedbackText.length < 5) throw new Error('empty');
+  } catch(e) {
+    const ratio2 = maxTotal > 0 ? totalScore / maxTotal : 0;
+    feedbackText = ratio2 >= 0.8
+      ? '오늘 훈련을 정말 잘 하셨어요! 꾸준히 하시면 더욱 좋아지실 거예요.'
+      : ratio2 >= 0.6
+      ? '오늘 훈련을 열심히 하셨어요. 조금 어려운 부분도 있었지만 잘 하셨어요!'
+      : '오늘 훈련을 함께 해주셔서 고마워요. 매일 조금씩 연습하면 점점 나아지실 거예요.';
+  }
+  activeTraining.feedback = feedbackText;
+
+  // 결과 화면 표시
+  trSetKoko(feedbackText);
+  trSetTitle('오늘의 훈련 완료!');
+  trSetInstruction('');
+
+  // 영역별 점수 바
+  const scoreBars = Object.entries(activeTraining.domains)
+    .filter(([, d]) => d.max > 0)
+    .map(([k, d]) => {
+      const pct = Math.round(d.score / d.max * 100);
+      const col = pct >= 80 ? '#3BA776' : pct >= 60 ? '#E5A33D' : '#D9534F';
+      return `<div class="tr-score-row">
+        <div class="tr-score-emoji">${TR_DOMAINS[k].emoji}</div>
+        <div class="tr-score-label">${TR_DOMAINS[k].label}</div>
+        <div class="tr-score-bar-bg"><div class="tr-score-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+        <div class="tr-score-val" style="color:${col}">${d.score}/${d.max}</div>
+      </div>`;
+    }).join('');
+
+  const memPct = Math.round(recalled / memWords.length * 100);
+  const totalPct = maxTotal > 0 ? Math.round(totalScore / maxTotal * 100) : 0;
+
+  trSetContent(`
+    <div class="tr-total-score" style="margin-bottom:6px;">
+      <span class="tr-total-score-num">${totalScore}</span>
+      <span class="tr-total-score-max"> / ${maxTotal}점</span>
+    </div>
+    <div style="text-align:center;font-size:13px;color:var(--gray);margin-bottom:16px;">기억 회상 ${recalled}/${memWords.length}개 (${memPct}%)</div>
+    <div class="tr-score-grid">${scoreBars}</div>
+  `);
+
+  trSetAction(`<button class="tr-btn" onclick="trFinishSession()">훈련 마치기</button>`);
+
+  return activeTraining;
 }
 
-// 통화 끝에서 호출됨. 평일이면 5문항을 순서대로 띄우고 결과를 todaysQuizSet에 모아서 반환.
-// 주말이면 퀴즈 없이 바로 null 반환(대화+사진만 진행).
-async function askDailyQuiz() {
-  const domainIndex = getTodaysQuizDomainIndex();
-  if (domainIndex === null) { todaysQuizSet = null; return null; } // 토/일 — 퀴즈 생략
+function trFinishSession() {
+  trShowOverlay(false);
+  // 오버레이 닫힌 후 Promise가 이미 resolve됨 — endCall에서 awaited
+  window._trSessionDone && window._trSessionDone();
+}
 
-  const { domain, questions } = buildQuizDomainBank()[domainIndex];
-  const items = [];
-  for (const q of questions) {
-    const result = await new Promise((resolve) => {
-      showQuiz({
-        question: q.question,
-        options: q.options,
-        correctIndex: q.correctIndex,
-        image: q.image,
-        onAnswer: (isCorrect, chosenIndex) => resolve({ question: q.question, chosen: q.options[chosenIndex - 1], isCorrect }),
-      });
+// ── 퀴즈 오버레이 하위 호환 (사용 안 됨, 빈 함수로 유지) ─────────
+function showQuiz() {}
+function selectQuizOption() {}
+function hideQuiz() {}
+// currentQuiz: 기존 선언과 중복 방지 — 상단에 이미 선언됨
+
+// ── 자녀 화면 — 주간 훈련 현황 카드 ──────────────────────────────
+function renderWeeklyTrainingCard() {
+  const dayLabels = ['월','화','수','목','금'];
+  const weekDates = getThisWeekDates();
+  const now = new Date();
+  const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+
+  // 주간 도메인 합산
+  const weekDomains = Object.fromEntries(Object.keys(TR_DOMAINS).map(k => [k, {score:0,max:0}]));
+
+  const rows = dayLabels.map((label, i) => {
+    const date = weekDates[i];
+    const isToday = date === todayStr;
+    const dayReports = reportList.filter(r => r.날짜 === date && r.인지훈련);
+
+    // 도메인 합산
+    dayReports.forEach(r => {
+      if (r.인지훈련?.domains) {
+        Object.entries(r.인지훈련.domains).forEach(([k,d]) => {
+          if (weekDomains[k]) { weekDomains[k].score += d.score||0; weekDomains[k].max += d.max||0; }
+        });
+      }
     });
-    items.push(result);
+
+    if (dayReports.length === 0) {
+      const focus = (TR_DAY_FOCUS[i+1] || TR_DAY_FOCUS[5]).label;
+      const status = date > todayStr ? '예정' : isToday ? '진행 예정' : '기록 없음';
+      return `<div class="tr-week-row${isToday ? ' today' : ''}">
+        <div class="tr-week-day">${label}</div>
+        <div class="tr-week-focus">${focus}</div>
+        <div class="tr-week-score" style="color:var(--gray);">-</div>
+      </div>`;
+    }
+
+    const r = dayReports[dayReports.length-1];
+    const t = r.인지훈련;
+    const pct = t.maxTotal > 0 ? Math.round(t.totalScore/t.maxTotal*100) : 0;
+    const col = pct>=80?'#3BA776':pct>=60?'#E5A33D':'#D9534F';
+    return `<div class="tr-week-row${isToday ? ' today' : ''}">
+      <div class="tr-week-day">${label}</div>
+      <div class="tr-week-focus">${escHtml(t.focus||'훈련 완료')}</div>
+      <div class="tr-week-score" style="color:${col}">${pct}%</div>
+    </div>`;
+  }).join('');
+
+  const card = document.getElementById('weekly-training-card');
+  if (card) card.innerHTML = rows;
+
+  // 주간 도메인 막대
+  const domainBarsEl = document.getElementById('domain-bars-weekly');
+  if (domainBarsEl) {
+    domainBarsEl.innerHTML = Object.entries(weekDomains)
+      .filter(([,d]) => d.max > 0)
+      .map(([k,d]) => {
+        const pct = Math.round(d.score/d.max*100);
+        const col = pct>=80?'#3BA776':pct>=60?'#E5A33D':'#D9534F';
+        return `<div class="tr-domain-row">
+          <div class="tr-domain-emoji">${TR_DOMAINS[k].emoji}</div>
+          <div class="tr-domain-name">${TR_DOMAINS[k].label}</div>
+          <div class="tr-domain-bar-bg"><div class="tr-domain-bar-fill" style="width:${pct}%;background:${col}"></div></div>
+          <div class="tr-domain-pct" style="color:${col}">${pct}%</div>
+        </div>`;
+      }).join('') || '<div style="font-size:13px;color:var(--gray);text-align:center;padding:10px">이번 주 훈련 기록이 없어요</div>';
   }
-  const correctCount = items.filter(i => i.isCorrect).length;
-  todaysQuizSet = { domain, score: `${correctCount}/5`, correctCount, items };
-  return todaysQuizSet;
 }
+
+// 기존 퀴즈 카드 함수 → 새 함수로 리다이렉트
+function renderWeeklyQuizCard() { renderWeeklyTrainingCard(); }
 
 function stopPhotoStream() {
   if (photoStream) {
@@ -3363,7 +4000,19 @@ async function endCall() {
   showScreen('elder-end');
 
   // 오늘의 퀴즈 — 대화가 끝난 직후, 사진 찍기 전 타이밍에 진행
-  await askDailyQuiz();
+  // 인지훈련 세션 — Promise로 감싸서 trFinishSession 호출 시 resolve
+  await new Promise(resolve => {
+    window._trSessionDone = resolve;
+    runCognitiveTraining().then(result => {
+      // 주말 등 훈련이 없으면 즉시 완료
+      if (!result) { trShowOverlay(false); resolve(); }
+      else { window._trSessionDone = resolve; } // trFinishSession에서 호출됨
+    }).catch(e => {
+      console.error('훈련 세션 오류:', e);
+      trShowOverlay(false);
+      resolve();
+    });
+  });
 
   // 셀프 카메라 — 동의받고 촬영 (안 찍으면 null)
   const photoData = await askForPhoto();
@@ -3449,7 +4098,28 @@ ${transcript}
   report.대화내용 = transcript; // 원본 대화도 함께 저장
   report.생성시각 = now.getTime(); // 정렬용
   report.familyId = currentFamilyId || null; // 가족 단위 공유
-  if (todaysQuizSet) report.인지퀴즈 = todaysQuizSet; // 평일에만 존재(주말은 null)
+  // 인지훈련 결과 저장 (v2.0)
+  if (activeTraining) {
+    report.인지훈련 = {
+      date:           activeTraining.date,
+      focus:          activeTraining.focus,
+      duration:       activeTraining.duration,
+      difficulty:     activeTraining.difficulty,
+      domains:        activeTraining.domains,
+      totalScore:     activeTraining.totalScore,
+      maxTotal:       activeTraining.maxTotal,
+      memoryWords:    activeTraining.memoryWords,
+      memoryRecalled: activeTraining.memoryRecalled,
+      feedback:       activeTraining.feedback,
+      items:          activeTraining.items,
+    };
+    // 하위 호환 (기존 인지퀴즈 필드)
+    report.인지퀴즈 = {
+      domain: activeTraining.focus,
+      score:  `${activeTraining.totalScore}/${activeTraining.maxTotal}`,
+      correctCount: activeTraining.totalScore,
+    };
+  }
 
   // 사진은 Firestore 문서에 직접 넣지 않고 Cloud Storage에 올린 뒤 URL만 저장함.
   // (이유: Firestore 문서는 1MB 용량 제한이 있어서, base64 사진을 통째로 넣으면
@@ -4267,7 +4937,7 @@ async function deletePhoto(reportId) {
 
 // ── 탭 3: AI 분석 ──
 function renderAnalysisTab() {
-  renderWeeklyQuizCard();
+  renderWeeklyTrainingCard();
 
   // 위험 신호 모으기
   const risks = [];
