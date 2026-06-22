@@ -809,6 +809,37 @@
   </div>
 
   <!-- ④ 통화 종료 / 브리핑 생성중 -->
+  <!-- 인지훈련 세션 오버레이 (v2.0) — 통화 후, 사진 전 -->
+  <div class="tr-overlay" id="tr-overlay">
+    <div class="tr-card">
+      <!-- 진행 단계 표시 -->
+      <div class="tr-progress" id="tr-progress"></div>
+      <!-- 도메인 태그 -->
+      <div style="margin-bottom:10px;" id="tr-domain-area"></div>
+      <!-- 코코 말풍선 -->
+      <div class="tr-koko-wrap" id="tr-koko-wrap" style="display:none">
+        <div class="tr-koko-avatar koko-img"></div>
+        <div class="tr-koko-bubble" id="tr-koko-bubble"></div>
+      </div>
+      <!-- 제목 / 지시문 -->
+      <div class="tr-title" id="tr-title"></div>
+      <div class="tr-instruction" id="tr-instruction"></div>
+      <!-- 메인 콘텐츠 (단어 그리드, 선택지 등) -->
+      <div id="tr-content"></div>
+      <!-- 반응 메시지 -->
+      <div class="tr-response" id="tr-response"></div>
+      <!-- 힌트 링크 -->
+      <div class="tr-hint-link" id="tr-hint-link" style="display:none" onclick="useTrainingHint()">💡 힌트 보기</div>
+      <!-- 버튼 영역 -->
+      <div id="tr-action"></div>
+    </div>
+  </div>
+
+  <!-- 구형 퀴즈 오버레이 (하위 호환성 — 실제로 사용 안 됨) -->
+  <div class="quiz-overlay" id="quiz-overlay" style="display:none">
+    <div class="quiz-card">
+      <div class="quiz-image" id="quiz-image">🧠</div>
+
   <div id="elder-end" class="screen">
     <div class="end-screen-body">
       <div class="end-icon" id="end-icon">✅</div>
@@ -849,36 +880,6 @@
   </div>
   <canvas id="photo-canvas" style="display:none;"></canvas>
 
-  <!-- 인지훈련 세션 오버레이 (v2.0) — 통화 후, 사진 전 -->
-  <div class="tr-overlay" id="tr-overlay">
-    <div class="tr-card">
-      <!-- 진행 단계 표시 -->
-      <div class="tr-progress" id="tr-progress"></div>
-      <!-- 도메인 태그 -->
-      <div style="margin-bottom:10px;" id="tr-domain-area"></div>
-      <!-- 코코 말풍선 -->
-      <div class="tr-koko-wrap" id="tr-koko-wrap" style="display:none">
-        <div class="tr-koko-avatar koko-img"></div>
-        <div class="tr-koko-bubble" id="tr-koko-bubble"></div>
-      </div>
-      <!-- 제목 / 지시문 -->
-      <div class="tr-title" id="tr-title"></div>
-      <div class="tr-instruction" id="tr-instruction"></div>
-      <!-- 메인 콘텐츠 (단어 그리드, 선택지 등) -->
-      <div id="tr-content"></div>
-      <!-- 반응 메시지 -->
-      <div class="tr-response" id="tr-response"></div>
-      <!-- 힌트 링크 -->
-      <div class="tr-hint-link" id="tr-hint-link" style="display:none" onclick="useTrainingHint()">💡 힌트 보기</div>
-      <!-- 버튼 영역 -->
-      <div id="tr-action"></div>
-    </div>
-  </div>
-
-  <!-- 구형 퀴즈 오버레이 (하위 호환성 — 실제로 사용 안 됨) -->
-  <div class="quiz-overlay" id="quiz-overlay" style="display:none">
-    <div class="quiz-card">
-      <div class="quiz-image" id="quiz-image">🧠</div>
       <div class="quiz-question" id="quiz-question"></div>
       <button class="quiz-option" id="quiz-option-1" onclick="selectQuizOption(1)"></button>
       <button class="quiz-option" id="quiz-option-2" onclick="selectQuizOption(2)"></button>
@@ -1240,7 +1241,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v7.1.1';
+const APP_VERSION = 'v7.1.2';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -1354,12 +1355,13 @@ const SYSTEM = `당신은 "코코"입니다. 어르신을 매일 찾아오는 AI
 
 [대화 마무리 — 오늘 일기 복기]
 - 10~14턴 또는 4~5분 경과 시 마무리 준비
-- 끝내기 전에 반드시 오늘 나눈 이야기를 "오늘 일기"처럼 구체적으로 다시 들려드려요.
-  예: "오늘 일기 정리해볼게요. 오늘 아침엔 산책하시고, 옛날 부산 사실 때 얘기도 들려주셨네요."
-  (그냥 "오늘 이야기 잘 들었어요" 같은 뭉뚱그린 인사로 때우지 말 것 — 실제로 들은 구체적인 내용 2~3가지를 짚어줘야 함)
-- 복기 후 건강 당부 → 작별 인사
+- 어르신이 전화를 빨리 끊으려 하거나 대화가 매우 짧았다면 → 복기 없이 바로 짧게 작별 인사만 해요
+  예: "알겠어요! 다음에 또 이야기 나눠요. 건강하세요! [통화종료]"
+- 실제로 이야기를 나눴을 때만 → 그 대화에서 실제로 나온 내용만 복기해요
+  ❌ 절대 금지: 어르신이 말씀하지 않은 내용(식사, 건강, 날씨 등)을 지어내서 말하기
+  ✓ 올바른 예: "오늘 일기 정리해볼게요. 고향 얘기 들려주셨네요. 정말 좋았어요! 약 잘 챙겨 드시고 푹 쉬세요. 내일 또 올게요! [통화종료]"
+  ✓ 짧은 경우 예: "오늘도 찾아와 주셔서 감사해요. 내일 또 올게요! [통화종료]"
 - 마무리 인사 맨 끝에 반드시 [통화종료] 표시
-- 예시: "오늘 일기 정리해볼게요. 아침에 산책하시고, 옛날 부산 사실 때 얘기도 들려주셨네요. 정말 좋은 하루였어요! 약 잘 챙겨 드시고 푹 쉬세요. 내일 또 일기 쓰러 올게요! [통화종료]"
 - 어르신이 더 이야기하고 싶어 하시면 마무리하지 말고 더 들어드려요`;
 
 // ── 초기화 ──────────────────────────────────────────────────
@@ -6234,6 +6236,10 @@ function buildKokoBrainPromptAddon(ctx) {
   if (ctx.nextOpening) {
     parts.push(`[다음 통화 시작 멘트 — 우선 사용]\n지난 통화 마무리에서 다음에 이걸 먼저 물어보기로 했어요: "${ctx.nextOpening}"\n짧은 인사 후 자연스럽게 이 주제로 들어가세요. 다만 어르신이 먼저 다른 이야기를 꺼내면 그쪽을 따라가도 좋아요.`);
   }
+
+  // 날조 방지 — 항상 포함
+  parts.push(`[절대 금지 — 날조]\n어르신이 실제로 말씀하지 않은 내용(식사, 건강 상태, 기분, 날씨 등)을 추측하거나 지어내서 말하지 말 것. 마무리 복기도 실제로 대화한 내용만 언급. 대화가 짧았으면 복기 없이 바로 작별 인사.`);
+
 
   const progress = ctx.interviewProgress || {};
   const unfinished = INTERVIEW_TOPICS.filter(t => (progress[t] || 0) < 70);
