@@ -980,10 +980,6 @@
         <div class="section-head"><div class="section-title">감지된 위험 신호</div></div>
         <div id="analysis-risks"></div>
 
-        <div class="section-head"><div class="section-title">이번 주 인지훈련 (평일 5일)</div></div>
-        <div class="tr-week-card" id="weekly-training-card"></div>
-        <div class="chart-note" style="margin: -8px 0 14px;">월~금 매일 약 10분 AI 코코와 인지훈련을 진행해요. 주말은 대화와 사진만 하고 쉬어가요.</div>
-
         <div class="section-head"><div class="section-title">영역별 주간 평균</div></div>
         <div class="ios-card">
           <div class="tr-domain-bars" id="domain-bars-weekly"></div>
@@ -1240,7 +1236,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v7.1.6';
+const APP_VERSION = 'v7.1.7';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -4120,6 +4116,7 @@ async function trDoMemoryRecall(words) {
       });
 
       trSetContent('');
+      window._trQ = { options: opts, correct: target };   // ← 반드시 버튼 생성 전에 설정
       trSetAction(`
         <div class="tr-options">
           ${opts.map((o, j) => `<button class="tr-opt" id="trrec${j}" onclick="trSelectRecall(${j})">${o}</button>`).join('')}
