@@ -348,6 +348,23 @@
   .tr-domain-bar-fill { height:100%; border-radius:3px; transition:width .5s; }
   .tr-domain-pct { font-size:12px; font-weight:700; width:30px; text-align:right; flex-shrink:0; }
 
+  /* ── 집중력·집행기능 인터랙티브 훈련 ───────────────────────────── */
+  .tr-tap-area { position:relative; width:100%; height:248px; background:#F7F8FA; border-radius:18px; margin:12px 0; overflow:hidden; touch-action:manipulation; }
+  .tr-tap-svg  { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+  .tr-tap-node { position:absolute; width:50px; height:50px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:18px; font-weight:800; cursor:pointer; border:2.5px solid #CBD5E1; background:white; color:#334155; transform:translate(-50%,-50%); user-select:none; -webkit-tap-highlight-color:transparent; transition:background .15s,border-color .15s; }
+  .tr-tap-node.let { background:#EEF2FF; border-color:#A5B4FC; color:#4338CA; }
+  .tr-tap-node.correct { background:#D1FAE5 !important; border-color:#3BA776 !important; color:#065F46 !important; pointer-events:none; }
+  .tr-tap-node.wrong   { background:#FDECEC !important; border-color:#D9534F !important; color:#B91C1C !important; }
+  .tr-tap-hint { text-align:center; font-size:14px; color:#64748B; margin-top:4px; min-height:22px; }
+  .tr-tap-hint b { color:#2A3F5F; font-size:16px; }
+  /* 글자 찾기 그리드 */
+  .tr-letter-grid { display:grid; grid-template-columns:repeat(6,1fr); gap:7px; margin:12px 0 4px; }
+  .tr-letter-cell { height:46px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:700; cursor:pointer; border:2px solid #E2E8F0; background:white; color:#334155; -webkit-tap-highlight-color:transparent; transition:all .12s; }
+  .tr-letter-cell.tapped  { background:#EEF2FF; border-color:#6366F1; color:#4338CA; }
+  .tr-letter-cell.correct { background:#D1FAE5; border-color:#3BA776; color:#065F46; pointer-events:none; }
+  .tr-letter-cell.missed  { background:#FDECEC; border-color:#D9534F; color:#B91C1C; pointer-events:none; }
+  .tr-letter-cell.falsealarm { background:#FEF3C7; border-color:#E5A33D; color:#B45309; pointer-events:none; }
+
 
 
   /* 어르신 프로필 카드 */
@@ -1236,7 +1253,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v7.1.7';
+const APP_VERSION = 'v7.2.0';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -5708,26 +5725,26 @@ function getTodayTasks(dow, difficulty) {
     tasks.push({ type:'common', ...pick(commonPool) });
     tasks.push(randCalc());
     tasks.push({ type:'mc4', domain:'language', ...pick(langPool) });
-  } else if (dow === 2) { // 화: 주의력·계산
-    tasks.push(randCalc());
-    tasks.push(randCalc());
-    tasks.push({ type:'mc2', domain:'visuospatial', ...pick(spatialPool), koko:null });
-    tasks.push({ type:'situation', ...pick(situPool), koko:null });
+  } else if (dow === 2) { // 화: 주의력·계산 — 인터랙티브 집중력 훈련 포함
+    tasks.push({ type:'tap-target' });                                    // A 글자 찾기
+    tasks.push(randCalc());                                               // 계산
+    tasks.push({ type:'tap-sequence', count: difficulty <= 1 ? 5 : 6 }); // 숫자 순서 터치
+    tasks.push(randCalc());                                               // 계산
   } else if (dow === 3) { // 수: 언어
     tasks.push({ type:'mc4', domain:'language', ...pick(langPool) });
     tasks.push({ type:'mc4', domain:'language', ...pick(langPool.filter(l=>l.correct!==tasks.at(-1).correct)) });
     tasks.push({ type:'common', ...pick(commonPool) });
     tasks.push(randCalc());
-  } else if (dow === 4) { // 목: 시공간·실행
+  } else if (dow === 4) { // 목: 시공간·실행 — 인터랙티브 집행기능 포함
+    tasks.push({ type:'trail-making', length: difficulty <= 1 ? 3 : 4 }); // Trail Making
     tasks.push({ type:'mc2', domain:'visuospatial', ...pick(spatialPool), koko:null });
-    tasks.push({ type:'mc2', domain:'visuospatial', ...pick(spatialPool.filter(s=>s.correct!==tasks.at(-1).correct)), koko:null });
     tasks.push({ type:'situation', ...pick(situPool), koko:null });
     tasks.push({ type:'common', ...pick(commonPool) });
-  } else { // 금: 종합 + 토/일 fallback
-    tasks.push(randCalc());
-    tasks.push({ type:'mc4', domain:'language', ...pick(langPool) });
-    tasks.push({ type:'mc2', domain:'visuospatial', ...pick(spatialPool), koko:null });
-    tasks.push({ type:'common', ...pick(commonPool) });
+  } else { // 금: 종합 — 인터랙티브 혼합
+    tasks.push({ type:'tap-sequence', count: 5 });                        // 집중력
+    tasks.push(randCalc());                                               // 계산
+    tasks.push({ type:'mc4', domain:'language', ...pick(langPool) });     // 언어
+    tasks.push({ type:'trail-making', length: 3 });                       // 집행기능
   }
 
   return tasks;
@@ -5784,6 +5801,12 @@ async function runCognitiveTraining() {
         correct:task.correct, wrong:task.wrong, koko:task.koko });
     } else if (task.type === 'calc') {
       await trAskCalc({ a:task.a, b:task.b, op:task.op });
+    } else if (task.type === 'tap-sequence') {
+      await trAskTapSequence({ count: task.count || 5 });
+    } else if (task.type === 'tap-target') {
+      await trAskTapTarget();
+    } else if (task.type === 'trail-making') {
+      await trAskTrailMaking({ length: task.length || 3 });
     }
   }
 
@@ -5878,6 +5901,197 @@ async function runCognitiveTraining() {
 
   return activeTraining;
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 집중력·집행기능 인터랙티브 훈련 (MoCA 참고)
+// ═══════════════════════════════════════════════════════════════
+
+// ── 공통 헬퍼: 겹치지 않는 노드 위치 생성 ───────────────────────
+function trGenPositions(count) {
+  const grid = [
+    {x:18,y:18},{x:50,y:13},{x:82,y:18},{x:13,y:52},{x:50,y:52},
+    {x:87,y:52},{x:18,y:82},{x:50,y:82},{x:82,y:82},
+    {x:34,y:33},{x:66,y:33},{x:34,y:67},{x:66,y:67},
+  ];
+  return grid.sort(() => Math.random() - .5).slice(0, count);
+}
+
+// ── SVG 연결선 그리기 ─────────────────────────────────────────
+function trDrawLine(svgId, areaId, x1p, y1p, x2p, y2p, color) {
+  const area = document.getElementById(areaId);
+  const svg  = document.getElementById(svgId);
+  if (!area || !svg) return;
+  const w = area.clientWidth, h = area.clientHeight;
+  const ln = document.createElementNS('http://www.w3.org/2000/svg', 'line');
+  ln.setAttribute('x1', x1p/100*w); ln.setAttribute('y1', y1p/100*h);
+  ln.setAttribute('x2', x2p/100*w); ln.setAttribute('y2', y2p/100*h);
+  ln.setAttribute('stroke', color || '#3BA776');
+  ln.setAttribute('stroke-width', '3');
+  ln.setAttribute('stroke-linecap', 'round');
+  svg.appendChild(ln);
+}
+
+// ── ① 숫자 순서대로 터치 (집중력) ────────────────────────────
+function trAskTapSequence({ count = 5 } = {}) {
+  return new Promise(resolve => {
+    trSetDomain('attention');
+    trSetKoko('숫자들이 보이죠? 가장 작은 숫자부터 순서대로 터치해주세요!');
+    trSetTitle('작은 숫자부터 순서대로 터치');
+    trSetInstruction(''); trSetResponse(''); trSetHint(false, null);
+    window._trNextStep = resolve;
+
+    const pool = [1,2,3,4,5,6,7,8,9].sort(() => Math.random()-.5).slice(0, count);
+    const sorted = [...pool].sort((a,b)=>a-b);
+    const pos = trGenPositions(count);
+    window._tapQ = { pool, sorted, pos, nextIdx:0, errors:0, lastDomIdx:null };
+
+    trSetContent(`
+      <div class="tr-tap-area" id="trTapArea">
+        <svg class="tr-tap-svg" id="trTapSvg"></svg>
+        ${pool.map((n,i) => `<div class="tr-tap-node" id="tn${i}"
+          style="left:${pos[i].x}%;top:${pos[i].y}%"
+          onclick="trTapSeqNode(${i})">${n}</div>`).join('')}
+      </div>
+      <div class="tr-tap-hint" id="trTapHint">먼저: <b>${sorted[0]}</b>을(를) 터치하세요</div>`);
+    trSetAction('');
+  });
+}
+
+function trTapSeqNode(idx) {
+  const q = window._tapQ;
+  if (!q || q.nextIdx >= q.sorted.length) return;
+  const tapped = q.pool[idx], expected = q.sorted[q.nextIdx];
+
+  if (tapped === expected) {
+    const el = document.getElementById('tn'+idx);
+    el.classList.add('correct');
+    if (q.lastDomIdx !== null)
+      trDrawLine('trTapSvg','trTapArea', q.pos[q.lastDomIdx].x, q.pos[q.lastDomIdx].y, q.pos[idx].x, q.pos[idx].y, '#3BA776');
+    q.lastDomIdx = idx;
+    q.nextIdx++;
+    if (q.nextIdx >= q.sorted.length) {
+      trSetResponse(q.errors===0 ? '완벽해요! 👍' : '잘 하셨어요!', 'good');
+      trScore('attention', q.errors<=1, 0);
+      const next=window._trNextStep; window._trNextStep=null; setTimeout(()=>next&&next(), 1300);
+    } else {
+      const h=document.getElementById('trTapHint');
+      if(h) h.innerHTML=`다음: <b>${q.sorted[q.nextIdx]}</b>을(를) 터치하세요`;
+    }
+  } else {
+    q.errors++;
+    trSetResponse('순서가 달라요, 다시 해보세요!', '');
+    const el=document.getElementById('tn'+idx); el.classList.add('wrong');
+    setTimeout(()=>{ el.classList.remove('wrong'); trSetResponse('',''); }, 700);
+  }
+}
+
+// ── ② A 글자 찾기 (집중력) ────────────────────────────────────
+function trAskTapTarget() {
+  return new Promise(resolve => {
+    trSetDomain('attention');
+    trSetKoko('아래 글자들 중에서 "A"를 모두 찾아 터치해주세요!');
+    trSetTitle('"A"를 모두 찾아 터치하세요');
+    trSetInstruction('A가 아닌 글자는 터치하지 마세요');
+    trSetResponse(''); trSetHint(false, null);
+    window._trNextStep = resolve;
+
+    const nontargets = 'BCDEFGHKLMNPQRS'.split('');
+    const fillers = Array.from({length:8}, ()=>nontargets[Math.floor(Math.random()*nontargets.length)]);
+    // 12칸 중 A 4개를 랜덤 위치에
+    const aIdxSet = new Set();
+    while(aIdxSet.size < 4) aIdxSet.add(Math.floor(Math.random()*12));
+    let fi=0;
+    const letters = Array.from({length:12}, (_,i) => aIdxSet.has(i) ? 'A' : fillers[fi++]||'B');
+    window._tapTargetQ = { letters, tapped: new Set(), aIdxSet };
+
+    trSetContent(`
+      <div class="tr-letter-grid">
+        ${letters.map((l,i)=>`<div class="tr-letter-cell" id="lc${i}" onclick="trTapLetter(${i})">${l}</div>`).join('')}
+      </div>`);
+    trSetAction(`<button class="tr-btn" onclick="trSubmitTapTarget()">확인했어요 ✓</button>`);
+  });
+}
+
+function trTapLetter(idx) {
+  const q = window._tapTargetQ; if(!q) return;
+  const el = document.getElementById('lc'+idx);
+  if(q.tapped.has(idx)){ q.tapped.delete(idx); el.classList.remove('tapped'); }
+  else { q.tapped.add(idx); el.classList.add('tapped'); }
+}
+
+function trSubmitTapTarget() {
+  const {letters, tapped, aIdxSet} = window._tapTargetQ;
+  const aArr = [...aIdxSet];
+  const hits = aArr.filter(i=>tapped.has(i)).length;
+  const falseAlarms = [...tapped].filter(i=>!aIdxSet.has(i)).length;
+  // 시각적 결과 표시
+  aArr.forEach(i=>{ const el=document.getElementById('lc'+i); if(el) el.classList.add(tapped.has(i)?'correct':'missed'); });
+  [...tapped].filter(i=>!aIdxSet.has(i)).forEach(i=>{ const el=document.getElementById('lc'+i); if(el) el.classList.add('falsealarm'); });
+  const ok = hits>=3 && falseAlarms<=1;
+  trSetResponse(ok?'잘 찾으셨어요! 👍':'조금 아쉽지만 괜찮아요!', ok?'good':'');
+  trScore('attention', ok, 0);
+  const next=window._trNextStep; window._trNextStep=null; setTimeout(()=>next&&next(), 1600);
+}
+
+// ── ③ 번호-글자 교대 잇기 Trail Making (집행기능) ─────────────
+function trAskTrailMaking({ length = 3 } = {}) {
+  return new Promise(resolve => {
+    trSetDomain('executive');
+    const preview = Array.from({length}, (_,i)=>`${i+1}→${'ABCDE'[i]}`).join('→');
+    trSetKoko(`숫자와 글자를 번갈아 순서대로 터치해주세요: ${preview}`);
+    trSetTitle('1→A→2→B→3→C 순서로 터치');
+    trSetInstruction('숫자 → 글자 → 숫자 → 글자 순서로');
+    trSetResponse(''); trSetHint(false, null);
+    window._trNextStep = resolve;
+
+    // 순서 배열 생성: [1,A,2,B,3,C,...]
+    const seq = [];
+    for(let i=0;i<length;i++){
+      seq.push({label:String(i+1), type:'num'});
+      seq.push({label:'ABCDE'[i], type:'let'});
+    }
+    const pos = trGenPositions(seq.length);
+    window._trailQ = { seq, pos, nextIdx:0, errors:0 };
+
+    // DOM idx === seq idx (위치만 셔플, 순서는 유지)
+    trSetContent(`
+      <div class="tr-tap-area" id="trTapArea">
+        <svg class="tr-tap-svg" id="trTapSvg"></svg>
+        ${seq.map((item,i)=>`<div class="tr-tap-node ${item.type}" id="tn${i}"
+          style="left:${pos[i].x}%;top:${pos[i].y}%"
+          onclick="trTrailTap(${i})">${item.label}</div>`).join('')}
+      </div>
+      <div class="tr-tap-hint" id="trTapHint">먼저: <b>${seq[0].label}</b>을(를) 터치하세요</div>`);
+    trSetAction('');
+  });
+}
+
+function trTrailTap(idx) {
+  const q = window._trailQ;
+  if(!q || q.nextIdx>=q.seq.length) return;
+
+  if(idx === q.nextIdx) {  // DOM idx === 정답 seq idx
+    const el = document.getElementById('tn'+idx);
+    el.classList.add('correct');
+    if(q.nextIdx > 0)
+      trDrawLine('trTapSvg','trTapArea', q.pos[q.nextIdx-1].x, q.pos[q.nextIdx-1].y, q.pos[idx].x, q.pos[idx].y, '#6366F1');
+    q.nextIdx++;
+    if(q.nextIdx >= q.seq.length) {
+      trSetResponse(q.errors===0?'완벽해요! 🎉':'잘 하셨어요!', 'good');
+      trScore('executive', q.errors<=1, 0);
+      const next=window._trNextStep; window._trNextStep=null; setTimeout(()=>next&&next(), 1300);
+    } else {
+      const h=document.getElementById('trTapHint');
+      if(h) h.innerHTML=`다음: <b>${q.seq[q.nextIdx].label}</b>을(를) 터치하세요`;
+    }
+  } else {
+    q.errors++;
+    trSetResponse('순서가 달라요! 다시 해보세요', '');
+    const el=document.getElementById('tn'+idx); el.classList.add('wrong');
+    setTimeout(()=>{ el.classList.remove('wrong'); trSetResponse('',''); }, 700);
+  }
+}
+
 
 function trFinishSession() {
   trShowOverlay(false);
