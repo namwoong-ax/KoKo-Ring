@@ -1240,7 +1240,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v7.1.4';
+const APP_VERSION = 'v7.1.5';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -3888,15 +3888,19 @@ function trAskMC2({ domain, question, image, correct, wrong, koko }) {
     trSetContent(imgHtml);
 
     const options = Math.random() < 0.5 ? [correct, wrong] : [wrong, correct];
+    window._trQ = { options, correct };
     trSetAction(`
       <div class="tr-options">
-        ${options.map((o, i) => `<button class="tr-opt" id="tropt${i}" onclick="trSelectMC(${i}, '${o.replace(/'/g,"\\'")}', '${correct.replace(/'/g,"\\'")}', ${JSON.stringify(options)})">${o}</button>`).join('')}
+        ${options.map((o, i) => `<button class="tr-opt" id="tropt${i}" onclick="trSelectMC(${i})">${o}</button>`).join('')}
       </div>`);
     window._trNextStep = resolve;  // ← 핵심: resolve를 저장해야 trSelectMC에서 호출 가능
   });
 }
 
-function trSelectMC(idx, chosen, correct, options) {
+function trSelectMC(idx) {
+  const { options, correct } = window._trQ || {};
+  if (!options) return;
+  const chosen = options[idx];
   const isCorrect = chosen === correct;
   options.forEach((_, i) => {
     const btn = document.getElementById('tropt' + i);
@@ -3922,16 +3926,20 @@ function trAskMC4({ domain, question, correct, distractors, koko }) {
     window._trCurrentDomain = domain;
 
     const opts = [correct, ...distractors.slice(0,3)].sort(() => Math.random() - .5);
+    window._trQ = { options: opts, correct };
     trSetContent('');
     trSetAction(`
       <div class="tr-options">
-        ${opts.map((o, i) => `<button class="tr-opt" id="tr4opt${i}" onclick="trSelectMC4(${i}, '${o.replace(/'/g,"\\'")}', '${correct.replace(/'/g,"\\'")}', ${JSON.stringify(opts)})">${o}</button>`).join('')}
+        ${opts.map((o, i) => `<button class="tr-opt" id="tr4opt${i}" onclick="trSelectMC4(${i})">${o}</button>`).join('')}
       </div>`);
     window._trNextStep = resolve;
   });
 }
 
-function trSelectMC4(idx, chosen, correct, opts) {
+function trSelectMC4(idx) {
+  const { options: opts, correct } = window._trQ || {};
+  if (!opts) return;
+  const chosen = opts[idx];
   const isCorrect = chosen === correct;
   opts.forEach((_, i) => {
     const btn = document.getElementById('tr4opt' + i);
@@ -3939,7 +3947,6 @@ function trSelectMC4(idx, chosen, correct, opts) {
   });
   const btn = document.getElementById('tr4opt' + idx);
   if (btn) btn.classList.add(isCorrect ? 'selected' : 'wrong');
-  // 정답 버튼도 표시
   if (!isCorrect) {
     const ci = opts.indexOf(correct);
     const cb = document.getElementById('tr4opt' + ci);
@@ -3963,15 +3970,19 @@ function trAskCommon({ word1, word2, correct, wrong, koko }) {
     window._trNextStep = resolve;
 
     const opts = Math.random() < .5 ? [correct, wrong] : [wrong, correct];
+    window._trQ = { options: opts, correct };
     trSetContent('');
     trSetAction(`
       <div class="tr-options">
-        ${opts.map((o, i) => `<button class="tr-opt" id="trcmn${i}" onclick="trSelectCommon(${i},'${o.replace(/'/g,"\\'")}','${correct.replace(/'/g,"\\'")}',${JSON.stringify(opts)})">${o}</button>`).join('')}
+        ${opts.map((o, i) => `<button class="tr-opt" id="trcmn${i}" onclick="trSelectCommon(${i})">${o}</button>`).join('')}
       </div>`);
   });
 }
 
-function trSelectCommon(idx, chosen, correct, opts) {
+function trSelectCommon(idx) {
+  const { options: opts, correct } = window._trQ || {};
+  if (!opts) return;
+  const chosen = opts[idx];
   const isCorrect = chosen === correct;
   opts.forEach((_, i) => { const b = document.getElementById('trcmn'+i); if(b) b.classList.add('disabled'); });
   const b = document.getElementById('trcmn'+idx); if(b) b.classList.add(isCorrect ? 'selected' : 'wrong');
@@ -3993,10 +4004,11 @@ function trAskSituation({ situation, correct, wrong, koko }) {
     window._trNextStep = resolve;
 
     const opts = Math.random() < .5 ? [correct, wrong] : [wrong, correct];
+    window._trQ = { options: opts, correct };
     trSetContent('');
     trSetAction(`
       <div class="tr-options">
-        ${opts.map((o, i) => `<button class="tr-opt" id="trsit${i}" onclick="trSelectSit(${i},'${o.replace(/'/g,"\\'")}','${correct.replace(/'/g,"\\'")}',${JSON.stringify(opts)})">${o}</button>`).join('')}
+        ${opts.map((o, i) => `<button class="tr-opt" id="trsit${i}" onclick="trSelectSit(${i})">${o}</button>`).join('')}
       </div>`);
   });
 }
@@ -4028,15 +4040,19 @@ function trAskCalc({ a, b, op }) {
     window._trCurrentDomain = 'calculation';
     window._trNextStep = resolve;
 
+    window._trQ = { options: opts, correct: String(correct) };
     trSetContent('');
     trSetAction(`
       <div class="tr-options">
-        ${opts.map((o,i) => `<button class="tr-opt" id="trcalc${i}" onclick="trSelectCalc(${i},'${o}','${String(correct)}',${JSON.stringify(opts)})">${o}</button>`).join('')}
+        ${opts.map((o,i) => `<button class="tr-opt" id="trcalc${i}" onclick="trSelectCalc(${i})">${o}</button>`).join('')}
       </div>`);
   });
 }
 
-function trSelectCalc(idx, chosen, correct, opts) {
+function trSelectCalc(idx) {
+  const { options: opts, correct } = window._trQ || {};
+  if (!opts) return;
+  const chosen = opts[idx];
   const isCorrect = chosen === correct;
   opts.forEach((_,i)=>{ const b=document.getElementById('trcalc'+i); if(b) b.classList.add('disabled'); });
   const b=document.getElementById('trcalc'+idx); if(b) b.classList.add(isCorrect?'selected':'wrong');
@@ -4103,7 +4119,7 @@ async function trDoMemoryRecall(words) {
       trSetContent('');
       trSetAction(`
         <div class="tr-options">
-          ${opts.map((o, j) => `<button class="tr-opt" id="trrec${j}" onclick="trSelectRecall(${j},'${o.replace(/'/g,"\\'")}','${target.replace(/'/g,"\\'")}',${JSON.stringify(opts)})">${o}</button>`).join('')}
+          ${opts.map((o, j) => `<button class="tr-opt" id="trrec${j}" onclick="trSelectRecall(${j})">${o}</button>`).join('')}
         </div>`);
       window._trNextStep = resolve;
     });
@@ -4118,18 +4134,17 @@ async function trDoMemoryRecall(words) {
   return { recalled, recalledWords };
 }
 
-function trSelectRecall(idx, chosen, correct, opts) {
+function trSelectRecall(idx) {
+  const { options: opts, correct } = window._trQ || {};
+  if (!opts) return;
+  const chosen = opts[idx];
   const isCorrect = chosen === correct;
   opts.forEach((_,i)=>{ const b=document.getElementById('trrec'+i); if(b) b.classList.add('disabled'); });
   const b=document.getElementById('trrec'+idx); if(b) b.classList.add(isCorrect?'selected':'wrong');
-  if (!isCorrect) {
-    const ci=opts.indexOf(correct);
-    const cb=document.getElementById('trrec'+ci); if(cb) cb.classList.add('hint');
-  }
+  if(!isCorrect){ const ci=opts.indexOf(correct); const cb=document.getElementById('trrec'+ci); if(cb) cb.classList.add('hint'); }
   trSetResponse(isCorrect ? '기억하셨어요!' : '아쉽지만 괜찮아요.', isCorrect?'good':'');
-  const nr=window._trNextStep;window._trNextStep=null;setTimeout(()=>nr&&nr(chosen), 1500);
+  const nr=window._trNextStep; window._trNextStep=null; setTimeout(()=>nr&&nr(chosen), 1500);
 }
-
 // 단순 정보 카드 (버튼 누르면 넘어감)
 function trShowInfo({ koko, title, instruction, btnLabel }) {
   return new Promise(resolve => {
