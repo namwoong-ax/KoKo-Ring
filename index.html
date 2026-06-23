@@ -1240,7 +1240,7 @@
 window.DEBUG_MODE = window.location.search.includes('debug');
 
 // ── 앱 버전 (코드 수정 시 이 한 곳만 갱신하면 모든 화면에 반영됨) ──
-const APP_VERSION = 'v7.1.5';
+const APP_VERSION = 'v7.1.6';
 const APP_VERSION_DATE = '2026-06-19';
 
 let userName = '';
@@ -4013,13 +4013,16 @@ function trAskSituation({ situation, correct, wrong, koko }) {
   });
 }
 
-function trSelectSit(idx, chosen, correct, opts) {
+function trSelectSit(idx) {
+  const { options: opts, correct } = window._trQ || {};
+  if (!opts) return;
+  const chosen = opts[idx];
   const isCorrect = chosen === correct;
   opts.forEach((_, i) => { const b=document.getElementById('trsit'+i); if(b) b.classList.add('disabled'); });
   const b=document.getElementById('trsit'+idx); if(b) b.classList.add(isCorrect?'selected':'wrong');
   trSetResponse(isCorrect ? trPick(TR_CORRECT_MSGS) : trPick(TR_WRONG_MSGS), isCorrect?'good':'');
   trScore('executive', isCorrect, trHintUsed?1:0);
-  const ns=window._trNextStep;window._trNextStep=null;setTimeout(()=>ns&&ns(), 1500);
+  const ns=window._trNextStep; window._trNextStep=null; setTimeout(()=>ns&&ns(), 1500);
 }
 
 // 계산 문제
